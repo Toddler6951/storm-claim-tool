@@ -162,6 +162,9 @@ def main():
     elif args.years_from is not None:
         years_wanted = list(range(args.years_from, current_year + 1))
     else:
+        # Default: last 10 years. Use --years-from 1950 (or any earlier
+        # year) once initial testing is settled and you want the full
+        # historical archive — note the repo size implications first.
         years_wanted = list(range(current_year - 9, current_year + 1))
 
     print(f"  Targeting years: {years_wanted[0]}–{years_wanted[-1]} ({len(years_wanted)} years)")

@@ -132,6 +132,10 @@
   .sev-marginal{background:#f1c40f;color:#333;}
   .sev-minor{background:#bdc3c7;color:#333;}
   .sev-other{background:#95a5a6;color:#fff;}
+  .conf{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600;}
+  .conf-High{background:#27ae60;color:#fff;}
+  .conf-Medium{background:#e67e22;color:#fff;}
+  .conf-Low{background:#bdc3c7;color:#333;}
   .source-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;}
   .src-SED{background:#d6eaff;color:#1f4e78;}
   .src-LSR{background:#fde6c4;color:#8a5500;}
@@ -270,18 +274,6 @@
         </div>
       </div>
 
-      <!-- ===== SED UPLOAD ===== -->
-      <div class="card">
-        <h2>NOAA SED upload (optional)</h2>
-        <div class="drop-zone" id="sed-drop">
-          <div class="big">📂</div>
-          <div><b>Drop SED CSV(s)</b> or click to browse</div>
-          <div class="hint" style="margin-top:4px;">Download from <a href="https://www.ncei.noaa.gov/stormevents/" target="_blank" rel="noopener">NCEI Storm Events</a> for the counties shown after geocoding.</div>
-          <input type="file" id="sed-files" accept=".csv,.csv.gz" multiple style="display:none;">
-        </div>
-        <div id="sed-files-list" style="margin-top:8px;"></div>
-      </div>
-
       <!-- ===== COUNTY INFO ===== -->
       <div class="card" id="county-card" style="display:none;">
         <h2>Counties for SED download</h2>
@@ -340,6 +332,7 @@
         <button class="tab active" data-tab="dashboard">Dashboard</button>
         <button class="tab" data-tab="map">Map</button>
         <button class="tab" data-tab="table">Table</button>
+        <button class="tab" data-tab="estimates">Estimates</button>
         <button class="tab" data-tab="raw">Raw Data</button>
         <button class="tab" data-tab="about">About</button>
       </div>
@@ -392,6 +385,25 @@
         </div>
       </div>
 
+      <!-- ESTIMATES -->
+      <div class="tab-panel" id="tab-estimates">
+        <div class="card">
+          <div class="toolbar">
+            <h2>Per-Day Estimates at Property</h2>
+            <div class="actions">
+              <button class="secondary" onclick="saveAsImage('tab-estimates','estimates')">Save Estimates PNG</button>
+              <button class="secondary" onclick="window.print()">Print Report</button>
+            </div>
+          </div>
+          <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">
+            Inverse-distance-weighted estimates of hail size and wind gust at the property,
+            one row per day where any report of the matching type was within 5 mi.
+            See <b>About</b> for methodology and limitations.
+          </p>
+          <div id="estimates-content"></div>
+        </div>
+      </div>
+
       <!-- RAW -->
       <div class="tab-panel" id="tab-raw">
         <div class="card">
@@ -411,7 +423,7 @@
 
           <h3>Data sources</h3>
           <p><b>NWS Local Storm Reports (LSR)</b> — real-time, spotter-submitted reports collected by NWS Weather Forecast Offices. The tool fetches them live from <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a>'s archive (going back to ~2003). LSRs may be preliminary and contain estimation errors.</p>
-          <p><b>NOAA Storm Events Database (SED)</b> — finalized, curated event records published by NCEI with a 2–4 month lag. Two ways to feed SED into this tool:</p><ul><li><b>Auto-fetch</b> (recommended): point <code>SED_BASE_URL</code> in the HTML at a host where you publish per-state CSVs. The tool pulls them automatically each search. Use the bundled <code>fetch_sed.py</code> to refresh the data.</li><li><b>Manual upload</b>: drag SED CSVs from <a href="https://www.ncei.noaa.gov/stormevents/" target="_blank" rel="noopener">NCEI</a> onto the SED upload box. Use this when you want to research a one-off date or location without configuring hosting.</li></ul><p>Either way, SED + LSR are merged via a cutoff: SED is authoritative through its latest BEGIN_DATE; LSR fills the gap after that.</p>
+          <p><b>NOAA Storm Events Database (SED)</b> — finalized, curated event records published by NCEI with a 2–4 month lag. The tool auto-fetches per-state SED CSVs from <code>SED_BASE_URL</code> on every search. <code>SED_BASE_URL</code> auto-detects from the page's URL when deployed; the data files are produced by <code>fetch_sed.py</code> via the bundled GitHub Action that runs monthly. SED + LSR merge via a cutoff: SED is authoritative through its latest BEGIN_DATE; LSR fills the gap after that.</p>
 
           <h3>County coverage</h3>
           <p>SED data is organized by county. When a property is near a county line, events in adjacent counties may still fall within the search radius. To handle this, the tool detects the property's county <em>and</em> the counties touching the search circle, then prompts you to download SED for all of them.</p>
@@ -419,11 +431,22 @@
           <h3>Coordinate system / projections</h3>
           <p>Distances are computed using the Haversine formula (great-circle, mean Earth radius 3,958.8 mi). For radii under ~50 mi this is accurate within tenths of a mile.</p>
 
-          <h3>Output formats</h3>
+          <h3>Per-day estimates (Estimates tab)</h3>
+<p>The Estimates tab emits one row per day per event type (Hail / Wind) — but only for days where at least one report of that type fell within 5 mi of the property. Each estimate is computed as follows:</p>
+<ol>
+<li><b>Inverse Distance Weighting (IDW)</b> with exponent <code>p=2</code>: each report's contribution is weighted by 1/distance². The 0.5 mi epsilon prevents an at-property report from dominating completely.</li>
+<li><b>Adaptive radius</b>: starts at 5 mi; if fewer than three reports are inside, expands to 10 → 15 → 20 mi. The radius actually used is shown so you can judge how local the estimate really is.</li>
+<li><b>Storm-track inference</b>: with ≥3 reports the tool fits a linear regression of (lat, lon) ~ time and reports the inferred storm motion direction. The perpendicular distance from the property to that track ("path proximity") is reported. If the property is on or very close to the inferred track, that strongly suggests the storm passed over the location.</li>
+<li><b>Confidence</b> (Low / Medium / High) blends closest-report distance, report count, path proximity, and whether the adaptive radius had to expand.</li>
+</ol>
+<p>Limitations: storm direction is *inferred* from the report sequence — actual wind-direction observations (HRRR/RAP forecasts, METAR) are not yet pulled. UTC day grouping can split a single storm across two rows when it crosses midnight UTC.</p>
+
+<h3>Output formats</h3>
           <ul>
             <li><b>Dashboard:</b> KPIs and charts across the full result set.</li>
             <li><b>Map:</b> Property + radius rings (5/10/15 mi + your custom) + event markers, color-coded by type.</li>
             <li><b>Table:</b> Sortable, filterable list with date, type, magnitude, distance, severity, source.</li>
+<li><b>Estimates:</b> Per-day IDW estimates at the property for hail size and wind speed (see methodology above).</li>
             <li><b>Raw Data:</b> Original LSR JSON, original SED CSV (passthrough), and a merged Combined CSV.</li>
             <li><b>Excel export:</b> Multi-sheet .xlsx workbook (Report, Combined, LSR, SED) for archival.</li>
             <li><b>Print:</b> Browser print → PDF for one-page claim reports.</li>
@@ -485,6 +508,23 @@ const STATE_TO_ABBR = {
   "SOUTH DAKOTA":"SD","TENNESSEE":"TN","TEXAS":"TX","UTAH":"UT","VERMONT":"VT",
   "VIRGINIA":"VA","WASHINGTON":"WA","WEST VIRGINIA":"WV","WISCONSIN":"WI","WYOMING":"WY"
 };
+
+/* US state 2-digit FIPS code → 2-letter postal code. Census Geographies
+   returns the FIPS in c.STATE for the Counties layer. */
+const STATE_FIPS_TO_ABBR = {
+  "01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE",
+  "11":"DC","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA",
+  "20":"KS","21":"KY","22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN",
+  "28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM",
+  "36":"NY","37":"NC","38":"ND","39":"OH","40":"OK","41":"OR","42":"PA","44":"RI",
+  "45":"SC","46":"SD","47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA",
+  "54":"WV","55":"WI","56":"WY","60":"AS","66":"GU","69":"MP","72":"PR","78":"VI"
+};
+function stateLabelToAbbr(s){
+  if (!s) return null;
+  const k = String(s).trim();
+  return STATE_TO_ABBR[k.toUpperCase()] || STATE_FIPS_TO_ABBR[k] || null;
+}
 
 /* =========================================================================
    STATE
@@ -584,6 +624,182 @@ function bearing16(lat1, lon1, lat2, lon2){
   const b=(toDeg(Math.atan2(y,x))+360)%360;
   return ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(b/22.5)%16];
 }
+function degTo16(deg){
+  const points = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return points[Math.round(((deg + 360) % 360) / 22.5) % 16];
+}
+
+/* =========================================================================
+   PER-DAY ESTIMATES AT PROPERTY
+   Method:
+     1. Group reports by UTC day and event category (Hail / Wind).
+     2. Trigger an estimate only when at least one report is within 5 mi of
+        the property (the user-stated threshold).
+     3. Inverse Distance Weighting with p=2: weight ∝ 1/distance². Closer
+        reports dominate. epsilon=0.5 mi prevents the weight from blowing up
+        for reports right at the property.
+     4. Adaptive radius for the average: start at 5 mi; if fewer than 3
+        reports inside, expand to 10 → 15 → 20 mi. Designed for rural areas
+        where spotters/stations are spread out.
+     5. Storm-track inference: for days with ≥3 reports, fit a linear
+        regression of (lat, lon) ~ time. The perpendicular distance from the
+        property to that track ("path proximity") is reported. If the
+        property lies on or very near the track, that's strong evidence the
+        storm passed over it — boosts confidence.
+     6. Confidence (Low / Medium / High) blends: closest report distance,
+        report count, path proximity, and adaptive-radius expansion.
+   Limitations:
+     - No actual wind-direction data is pulled. Storm direction is *inferred*
+       from the report sequence, not from forecast/observed wind. A future
+       enhancement would cross-check against HRRR/RAP forecast wind fields.
+     - UTC day grouping. Storms crossing UTC midnight may split into two
+       rows. SED times are stored in local time but written as UTC by the
+       parser; this is a known minor offset.
+   ========================================================================= */
+function estimateAtProperty(reports, ctx){
+  const valid = reports.filter(r => r.magnitude != null && r.distance != null);
+  if (!valid.length) return null;
+
+  // Adaptive radius
+  const ladder = [5, 10, 15, 20];
+  let radiusUsed = ladder[0];
+  let local = valid.filter(r => r.distance <= radiusUsed);
+  for (let i = 1; i < ladder.length && local.length < 3; i++) {
+    radiusUsed = ladder[i];
+    local = valid.filter(r => r.distance <= radiusUsed);
+  }
+  if (!local.length) return null;
+
+  // IDW, p=2
+  const p = 2, epsilon = 0.5;
+  let wSum = 0, wValSum = 0;
+  for (const r of local) {
+    const w = 1 / Math.pow(Math.max(r.distance, epsilon), p);
+    wSum += w;
+    wValSum += w * r.magnitude;
+  }
+  const value = wValSum / wSum;
+  const closestDist = Math.min(...local.map(r => r.distance));
+
+  // Storm-track inference
+  let direction = null, pathProximity = null;
+  if (local.length >= 3) {
+    const sorted = [...local].sort((a, b) => a.date - b.date);
+    const t0 = sorted[0].date.getTime();
+    const ts = sorted.map(r => (r.date.getTime() - t0) / 60000);
+    const lats = sorted.map(r => r.lat);
+    const lons = sorted.map(r => r.lon);
+    const tBar = ts.reduce((s, v) => s + v, 0) / ts.length;
+    const latBar = lats.reduce((s, v) => s + v, 0) / lats.length;
+    const lonBar = lons.reduce((s, v) => s + v, 0) / lons.length;
+    let nLat = 0, nLon = 0, dT = 0;
+    for (let i = 0; i < ts.length; i++) {
+      nLat += (ts[i] - tBar) * (lats[i] - latBar);
+      nLon += (ts[i] - tBar) * (lons[i] - lonBar);
+      dT += (ts[i] - tBar) ** 2;
+    }
+    if (dT > 0) {
+      const dLatPerMin = nLat / dT;
+      const dLonPerMin = nLon / dT;
+      const miPerLat = 69.0;
+      const miPerLon = 69.0 * Math.cos(latBar * Math.PI / 180);
+      const vy = dLatPerMin * miPerLat * 60;
+      const vx = dLonPerMin * miPerLon * 60;
+      const speed = Math.sqrt(vx * vx + vy * vy);
+      if (speed > 0.5) {
+        const deg = (Math.atan2(vx, vy) * 180 / Math.PI + 360) % 360;
+        direction = degTo16(deg);
+        const dx = (ctx.lon - lonBar) * miPerLon;
+        const dy = (ctx.lat - latBar) * miPerLat;
+        pathProximity = Math.abs(dx * vy - dy * vx) / speed;
+      }
+    }
+  }
+
+  // Confidence
+  let score = 0;
+  if (closestDist <= 2) score += 2; else if (closestDist <= 5) score += 1;
+  if (local.length >= 5) score += 2; else if (local.length >= 3) score += 1;
+  if (pathProximity != null) {
+    if (pathProximity <= 2) score += 2;
+    else if (pathProximity <= 5) score += 1;
+  }
+  if (radiusUsed > 10) score -= 1;
+  const confidence = score >= 4 ? 'High' : score >= 2 ? 'Medium' : 'Low';
+
+  return { value, n: local.length, closestDist, radiusUsed, direction, pathProximity, confidence };
+}
+
+function buildEstimates(){
+  if (!state.ctx || !state.combinedAll.length) return [];
+  const groups = {};
+  for (const e of state.combinedAll) {
+    if (!e.date || e.magnitude == null) continue;
+    if (e.category !== 'Hail' && e.category !== 'Wind') continue;
+    const day = e.date.toISOString().slice(0, 10);
+    const key = day + '|' + e.category;
+    (groups[key] = groups[key] || []).push(e);
+  }
+  const results = [];
+  for (const key of Object.keys(groups)) {
+    const [day, type] = key.split('|');
+    const reports = groups[key];
+    if (!reports.some(r => r.distance <= 5)) continue;
+    const est = estimateAtProperty(reports, state.ctx);
+    if (est) results.push({ date: day, type, ...est });
+  }
+  results.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type));
+  return results;
+}
+
+function renderEstimates(){
+  const container = document.getElementById('estimates-content');
+  if (!state.ctx) {
+    container.innerHTML = '<div class="empty"><div>Run a search first.</div></div>';
+    return;
+  }
+  const rows = buildEstimates();
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty"><div>No qualifying days.</div><div class="hint" style="margin-top:6px;">An estimate is emitted for a day only if at least one hail or wind report (with magnitude) was within 5 mi of the property.</div></div>';
+    return;
+  }
+  const fmtVal = (r) => r.type === 'Hail'
+    ? `<b>${r.value.toFixed(2)}"</b>`
+    : `<b>${Math.round(r.value)} mph</b>`;
+  container.innerHTML = `
+    <div class="table-wrap">
+      <table class="results">
+        <thead><tr>
+          <th>Date (UTC)</th>
+          <th>Type</th>
+          <th>Estimate at property</th>
+          <th>Reports used</th>
+          <th>Closest</th>
+          <th>Radius</th>
+          <th>Storm dir</th>
+          <th>Path prox.</th>
+          <th>Confidence</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td>${escapeHtml(r.date)}</td>
+              <td>${escapeHtml(r.type)}</td>
+              <td>${fmtVal(r)}</td>
+              <td>${r.n}</td>
+              <td>${r.closestDist.toFixed(2)} mi</td>
+              <td>${r.radiusUsed} mi</td>
+              <td>${r.direction ? '<b>'+escapeHtml(r.direction)+'</b>' : '—'}</td>
+              <td>${r.pathProximity != null ? r.pathProximity.toFixed(2) + ' mi' : '—'}</td>
+              <td><span class="conf conf-${r.confidence}">${r.confidence}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function bboxFromCenter(lat, lon, radiusMi){
   const dLat = radiusMi / 69.0;
   const dLon = radiusMi / (69.0 * Math.cos(lat * Math.PI / 180));
@@ -1248,7 +1464,7 @@ function renderRaw(){
 
     <h3>NOAA SED uploads (passthrough)</h3>
     ${state.sedFiles.length === 0 ?
-      `<p style="font-size:13px;color:var(--muted);">No SED files uploaded yet. Drop CSVs onto the SED box in the sidebar.</p>` :
+      `<p style="font-size:13px;color:var(--muted);">No SED data fetched yet for this query. Auto-fetch will populate this list as it pulls per-state files.</p>` :
       state.sedFiles.map((f, i) => `
         <div style="margin:8px 0;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:5px;padding:8px 12px;">
           <div>
@@ -1385,6 +1601,22 @@ function exportExcel(){
   ws2['!cols'] = headers.map(h => ({ wch: Math.max(10, h.length + 2) }));
   XLSX.utils.book_append_sheet(wb, ws2, 'Combined');
 
+  // Estimates sheet
+  const ests = (typeof buildEstimates === 'function') ? buildEstimates() : [];
+  if (ests.length) {
+    const eHeaders = ['Date (UTC)','Type','Estimate','Reports used','Closest (mi)','Radius (mi)','Storm direction','Path proximity (mi)','Confidence'];
+    const eRows = ests.map(r => [
+      r.date, r.type,
+      r.type === 'Hail' ? +r.value.toFixed(2) : Math.round(r.value),
+      r.n, +r.closestDist.toFixed(2), r.radiusUsed,
+      r.direction || '', r.pathProximity != null ? +r.pathProximity.toFixed(2) : '',
+      r.confidence,
+    ]);
+    const wsE = XLSX.utils.aoa_to_sheet([eHeaders, ...eRows]);
+    wsE['!cols'] = eHeaders.map(h => ({ wch: Math.max(10, h.length + 2) }));
+    XLSX.utils.book_append_sheet(wb, wsE, 'Estimates');
+  }
+
   // Original LSR sheet
   if (state.rawLSR && state.rawLSR.features && state.rawLSR.features.length) {
     const lsrHeaders = ['VALID','TYPETEXT','MAG','LAT','LON','CITY','COUNTY','STATE','SOURCE','REMARK','QUALIFY','WFO'];
@@ -1418,24 +1650,15 @@ function renderCounties(){
   const div = document.getElementById('county-info');
   if (!state.counties || !state.counties.length) { card.style.display = 'none'; return; }
   card.style.display = 'block';
-  div.innerHTML = state.counties.map(c => `
-    <span class="county-tag ${c.isPrimary ? 'primary-county' : ''}">${escapeHtml(c.name)} County, ${escapeHtml(c.state)}</span>
-  `).join(' ');
+  div.innerHTML = state.counties.map(c => {
+    const abbr = stateLabelToAbbr(c.state) || c.state || '';
+    return `<span class="county-tag ${c.isPrimary ? 'primary-county' : ''}">${escapeHtml(c.name)} County, ${escapeHtml(abbr)}</span>`;
+  }).join(' ');
 }
 
 /* =========================================================================
    SED DROP/UPLOAD
    ========================================================================= */
-const sedDrop = document.getElementById('sed-drop');
-const sedInput = document.getElementById('sed-files');
-sedDrop.addEventListener('click', () => sedInput.click());
-sedDrop.addEventListener('dragover', e => { e.preventDefault(); sedDrop.classList.add('dragover'); });
-sedDrop.addEventListener('dragleave', () => sedDrop.classList.remove('dragover'));
-sedDrop.addEventListener('drop', e => {
-  e.preventDefault(); sedDrop.classList.remove('dragover');
-  handleSEDFiles(e.dataTransfer.files);
-});
-sedInput.addEventListener('change', e => handleSEDFiles(e.target.files));
 
 async function handleSEDFiles(files){
   for (const file of Array.from(files || [])) {
@@ -1589,7 +1812,7 @@ async function runSearch(e){
     renderCounties();
 
     if (SED_BASE_URL) {
-      const stateAbbrs = [...new Set(state.counties.map(c => STATE_TO_ABBR[(c.state || '').toUpperCase()]).filter(Boolean))];
+      const stateAbbrs = [...new Set(state.counties.map(c => stateLabelToAbbr(c.state)).filter(Boolean))];
       if (stateAbbrs.length) {
         const startYr = new Date(start + 'T00:00Z').getUTCFullYear();
         const endYr   = new Date(end   + 'T00:00Z').getUTCFullYear();
@@ -1633,6 +1856,7 @@ function renderAll(){
   renderDashboard();
   renderMap();
   renderTable();
+  renderEstimates();
   renderRaw();
 }
 
