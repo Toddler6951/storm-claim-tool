@@ -1,0 +1,1825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Storm Event Lookup — Claim Research Tool</title>
+<!-- ===== AdSense (optional) =====
+     1) Replace YOUR_ADSENSE_PUBLISHER_ID with your AdSense publisher ID,
+        e.g. ca-pub-1234567890123456 (get it at https://adsense.google.com/).
+     2) Replace each data-ad-slot=" SLOT_ID " with the slot ID from your
+        AdSense dashboard for the matching ad unit.
+     3) The Google bot must crawl this page over HTTP, so deploy via
+        a host (GitHub Pages, Netlify, etc.) — file:// and localhost
+        won't serve real ads.
+     If you leave the placeholder ID, no ads load and no errors fire. -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=YOUR_ADSENSE_PUBLISHER_ID" crossorigin="anonymous" id="adsense-script" onerror="this.remove()"></script>
+<script>
+  // Strip the AdSense script if the publisher ID is still the placeholder.
+  (function(){
+    var s = document.getElementById("adsense-script");
+    if (s && s.src.indexOf("YOUR_ADSENSE_PUBLISHER_ID") !== -1) s.remove();
+  })();
+</script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root{
+    --primary:#1f4e78; --primary-light:#2e6da4; --accent:#e67e22;
+    --bg:#f5f7fa; --surface:#ffffff; --border:#d8dee9;
+    --text:#2c3e50; --muted:#6c757d;
+    --success:#27ae60; --warning:#f39c12; --danger:#c0392b;
+    --kpi-bg:#eaf3fb;
+    --hail:#3498db; --wind:#9b59b6; --tornado:#c0392b;
+    --flood:#1abc9c; --lightning:#f1c40f; --winter:#7f8c8d; --other:#95a5a6;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.5;}
+  header{background:var(--primary);color:#fff;padding:14px 22px;box-shadow:0 2px 4px rgba(0,0,0,.1);}
+  header h1{margin:0;font-size:20px;font-weight:600;}
+  header .subtitle{font-size:12px;opacity:.85;margin-top:3px;}
+  main{max-width:1500px;margin:0 auto;padding:14px;}
+  .layout{display:grid;grid-template-columns:340px 1fr;gap:14px;align-items:start;}
+  @media (max-width:1100px){.layout{grid-template-columns:1fr;}}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+  .card h2{margin:0 0 10px;font-size:13px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--primary);padding-bottom:5px;}
+  .card h3{margin:14px 0 8px;font-size:13px;font-weight:600;color:var(--primary);}
+
+  .form-row{margin-bottom:10px;}
+  .form-row label{display:block;font-weight:600;font-size:11px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px;}
+  .form-row input,.form-row select{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:5px;font-size:13px;font-family:inherit;background:#fff;}
+  .form-row input:focus,.form-row select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(31,78,120,.15);}
+  .form-row .hint{font-size:11px;color:var(--muted);margin-top:2px;}
+  .row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+  button.primary{background:var(--primary);color:#fff;border:0;padding:10px 14px;border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;width:100%;}
+  button.primary:hover{background:var(--primary-light);}
+  button.primary:disabled{background:#aab;cursor:not-allowed;}
+  button.secondary{background:#fff;color:var(--primary);border:1px solid var(--primary);padding:6px 11px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;}
+  button.secondary:hover{background:var(--primary);color:#fff;}
+  button.ghost{background:transparent;border:0;color:var(--muted);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;}
+  button.ghost:hover{background:#eef0f4;color:var(--primary);}
+
+  .status{margin-top:8px;padding:9px 11px;border-radius:5px;font-size:12px;display:none;}
+  .status.info{display:block;background:#e3f2fd;color:#0d47a1;border-left:3px solid #2196f3;}
+  .status.error{display:block;background:#ffebee;color:#b71c1c;border-left:3px solid var(--danger);}
+  .status.success{display:block;background:#e8f5e9;color:#1b5e20;border-left:3px solid var(--success);}
+  .status.warn{display:block;background:#fff8e1;color:#7d4900;border-left:3px solid var(--warning);}
+
+  /* Event type filter */
+  .filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;}
+  .filter-grid label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--text);font-weight:500;text-transform:none;letter-spacing:0;margin:0;padding:3px 0;}
+  .filter-grid input[type=checkbox]{width:14px;height:14px;cursor:pointer;}
+  .filter-grid .swatch{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:2px;}
+
+  /* Address autocomplete */
+  .suggestions{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-top:0;border-radius:0 0 5px 5px;max-height:240px;overflow:auto;z-index:1000;box-shadow:0 4px 8px rgba(0,0,0,.06);}
+  .suggestions .item{padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f0f0f0;}
+  .suggestions .item:hover, .suggestions .item.active{background:#f0f7ff;color:var(--primary);}
+  .suggestions .item:last-child{border-bottom:0;}
+  .suggestions .item small{color:var(--muted);display:block;font-size:11px;margin-top:1px;}
+
+  /* SED upload */
+  .drop-zone{border:2px dashed var(--border);border-radius:6px;padding:16px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;transition:all .15s;}
+  .drop-zone:hover,.drop-zone.dragover{border-color:var(--primary);background:#f0f7ff;color:var(--primary);}
+  .drop-zone .big{font-size:22px;margin-bottom:4px;}
+  .file-tag{display:inline-flex;align-items:center;gap:6px;background:#e8f5e9;color:#1b5e20;padding:4px 10px;border-radius:14px;font-size:12px;margin:4px 4px 0 0;}
+  .file-tag .x{cursor:pointer;font-weight:bold;color:#666;}
+
+  /* County info */
+  .counties{font-size:12px;line-height:1.7;}
+  .county-tag{display:inline-block;background:#eef3f8;color:var(--primary);padding:2px 8px;border-radius:10px;font-size:11px;margin:2px 3px 2px 0;border:1px solid #d0dde9;}
+  .county-tag.primary-county{background:var(--primary);color:#fff;font-weight:600;}
+
+  /* Tabs */
+  .tabs{display:flex;gap:2px;border-bottom:2px solid var(--primary);margin-bottom:14px;flex-wrap:wrap;}
+  .tab{padding:9px 16px;background:#e7eef5;color:var(--primary);border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;}
+  .tab:hover{background:#dbe6f1;}
+  .tab.active{background:var(--primary);color:#fff;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* KPIs */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+  @media (max-width:700px){.kpis{grid-template-columns:repeat(2,1fr);}}
+  .kpi{background:var(--kpi-bg);border-radius:6px;padding:11px;text-align:center;}
+  .kpi .num{font-size:22px;font-weight:700;color:var(--primary);line-height:1.1;}
+  .kpi .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:3px;}
+  .kpi .sub{font-size:10px;color:var(--muted);margin-top:2px;}
+
+  /* Map */
+  #map{height:520px;border-radius:6px;border:1px solid var(--border);}
+  .map-legend{font-size:11px;background:rgba(255,255,255,.95);padding:8px 10px;border-radius:5px;border:1px solid var(--border);line-height:1.7;}
+  .map-legend .ev{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;border:1px solid #fff;vertical-align:middle;}
+  .map-legend .ring{display:inline-block;width:14px;height:6px;border:1px solid #1f4e78;margin-right:5px;vertical-align:middle;}
+
+  /* Table */
+  table.results{width:100%;border-collapse:collapse;font-size:12px;}
+  table.results th{background:var(--primary);color:#fff;padding:7px 9px;text-align:left;cursor:pointer;user-select:none;position:sticky;top:0;font-weight:600;font-size:11px;}
+  table.results th:hover{background:var(--primary-light);}
+  table.results th .arrow{font-size:9px;opacity:.6;margin-left:3px;}
+  table.results td{padding:6px 9px;border-bottom:1px solid #eef0f4;}
+  table.results tr:hover td{background:#f5f9fc;}
+  table.results tr.in-window td{background:#fff8e1;}
+  table.results tr.in-window:hover td{background:#fff3c4;}
+  .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--border);border-radius:6px;}
+  .severity{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600;}
+  .sev-extreme{background:#7b1f1f;color:#fff;}
+  .sev-severe{background:#c0392b;color:#fff;}
+  .sev-significant{background:#e67e22;color:#fff;}
+  .sev-marginal{background:#f1c40f;color:#333;}
+  .sev-minor{background:#bdc3c7;color:#333;}
+  .sev-other{background:#95a5a6;color:#fff;}
+  .source-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;}
+  .src-SED{background:#d6eaff;color:#1f4e78;}
+  .src-LSR{background:#fde6c4;color:#8a5500;}
+
+  /* Charts */
+  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+  @media (max-width:900px){.chart-grid{grid-template-columns:1fr;}}
+  .chart-box{background:#fff;border:1px solid var(--border);border-radius:6px;padding:12px;}
+  .chart-box h3{margin:0 0 10px;font-size:13px;font-weight:600;color:var(--primary);}
+  .chart-box canvas{max-height:240px;}
+
+  /* History */
+  .history-item{padding:7px 9px;border:1px solid var(--border);border-radius:5px;margin-bottom:5px;cursor:pointer;font-size:12px;}
+  .history-item:hover{background:#f0f7ff;border-color:var(--primary);}
+  .history-item .h-addr{font-weight:600;color:var(--primary);font-size:12px;}
+  .history-item .h-meta{color:var(--muted);font-size:11px;margin-top:2px;}
+  .history-item .h-del{float:right;color:var(--danger);font-size:14px;text-decoration:none;font-weight:bold;}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+  .toolbar h2{margin:0 !important;border:none !important;padding:0 !important;}
+  .toolbar .actions button{margin-left:4px;}
+
+  footer{text-align:center;padding:14px;color:var(--muted);font-size:11px;border-top:1px solid var(--border);margin-top:20px;}
+  .empty{text-align:center;padding:40px 20px;color:var(--muted);}
+  .empty .big{font-size:42px;margin-bottom:6px;}
+
+  /* AdSense slot — hidden until configured */
+  .ad-slot{margin:14px 0;min-height:0;}
+  .ad-slot.active{min-height:90px;background:#fafbfc;border:1px dashed var(--border);border-radius:6px;padding:8px;}
+  details summary{cursor:pointer;font-weight:600;color:var(--primary);font-size:12px;padding:4px 0;}
+  details ul,details ol{padding-left:18px;margin:6px 0;}
+  details p{margin:6px 0;}
+
+  /* Print */
+  @media print {
+    header, aside.sidebar, .toolbar, button, .help, footer, .tabs{display:none !important;}
+    body, main{background:#fff;}
+    .layout{grid-template-columns:1fr;}
+    #map{height:300px;page-break-inside:avoid;}
+    .card{border:none;box-shadow:none;padding:0;page-break-inside:avoid;}
+    table.results{font-size:10px;}
+    table.results th{background:#1f4e78 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .kpi{background:#eaf3fb !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .table-wrap{max-height:none;overflow:visible;}
+    .tab-panel{display:block !important;}
+    .tab-panel.no-print{display:none !important;}
+    .print-header{display:block !important;}
+  }
+  .print-header{display:none;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Storm Event Lookup — Claim Research Tool</h1>
+  <div class="subtitle">Forensic property-claim research. Pulls NWS LSR live; merges with NOAA SED you upload. Address → proximity table, map, dashboard, raw files.</div>
+</header>
+
+<main>
+  <div class="print-header">
+    <h1 id="ph-addr"></h1>
+    <p id="ph-meta"></p>
+  </div>
+
+  <div class="layout">
+
+    <aside class="sidebar">
+      <!-- ===== SEARCH FORM ===== -->
+      <div class="card">
+        <h2>Search</h2>
+        <form id="search-form">
+          <div class="form-row" style="position:relative;">
+            <label for="address">Project address</label>
+            <input type="text" id="address" placeholder="Start typing… 123 Main St, Hillsboro, TX 76645" autocomplete="off">
+            <div id="address-suggestions" class="suggestions" style="display:none;"></div>
+            <div class="hint">Geocoded via Census Bureau. Suggestions from OpenStreetMap.</div>
+          </div>
+          <details class="form-row" style="margin-top:-4px;">
+            <summary style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">No street address? Enter coordinates</summary>
+            <div class="row-2" style="margin-top:6px;">
+              <div class="form-row" style="margin-bottom:0;">
+                <label for="manual-lat">Latitude</label>
+                <input type="number" id="manual-lat" step="0.0001" min="-90" max="90" placeholder="32.0095">
+              </div>
+              <div class="form-row" style="margin-bottom:0;">
+                <label for="manual-lon">Longitude</label>
+                <input type="number" id="manual-lon" step="0.0001" min="-180" max="180" placeholder="-97.13">
+              </div>
+            </div>
+            <div class="hint" style="margin-top:4px;">Used only when the address field is empty.</div>
+          </details>
+          <div class="row-2">
+            <div class="form-row">
+              <label for="start-date">Start date</label>
+              <input type="date" id="start-date" required>
+            </div>
+            <div class="form-row">
+              <label for="end-date">End date</label>
+              <input type="date" id="end-date" required>
+            </div>
+          </div>
+          <div class="row-2">
+            <div class="form-row">
+              <label for="radius">Search radius (mi)</label>
+              <input type="number" id="radius" min="1" max="100" step="1" value="15" required>
+            </div>
+            <div class="form-row">
+              <label for="claim-date">Claim date (optional)</label>
+              <input type="date" id="claim-date">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="claim-window">Claim window (± days)</label>
+            <input type="number" id="claim-window" min="0" max="60" step="1" value="7">
+            <div class="hint">Highlights events within ± N days of claim date.</div>
+          </div>
+          <button type="submit" class="primary" id="search-btn">Search Storm Reports</button>
+        </form>
+        <div id="status" class="status"></div>
+      </div>
+
+      <!-- ===== EVENT TYPE FILTER ===== -->
+      <div class="card">
+        <h2>Event types</h2>
+        <div class="filter-grid" id="type-filter">
+          <label><input type="checkbox" value="Hail" checked><span class="swatch" style="background:var(--hail)"></span>Hail</label>
+          <label><input type="checkbox" value="Wind" checked><span class="swatch" style="background:var(--wind)"></span>Wind</label>
+          <label><input type="checkbox" value="Tornado" checked><span class="swatch" style="background:var(--tornado)"></span>Tornado</label>
+          <label><input type="checkbox" value="Flood" checked><span class="swatch" style="background:var(--flood)"></span>Flood</label>
+          <label><input type="checkbox" value="Lightning" checked><span class="swatch" style="background:var(--lightning)"></span>Lightning</label>
+          <label><input type="checkbox" value="Winter" checked><span class="swatch" style="background:var(--winter)"></span>Winter</label>
+          <label><input type="checkbox" value="Other" checked><span class="swatch" style="background:var(--other)"></span>Other</label>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:6px;">
+          <button type="button" class="ghost" onclick="setFilters(true)">All</button>
+          <button type="button" class="ghost" onclick="setFilters(false)">None</button>
+        </div>
+      </div>
+
+      <!-- ===== SED UPLOAD ===== -->
+      <div class="card">
+        <h2>NOAA SED upload (optional)</h2>
+        <div class="drop-zone" id="sed-drop">
+          <div class="big">📂</div>
+          <div><b>Drop SED CSV(s)</b> or click to browse</div>
+          <div class="hint" style="margin-top:4px;">Download from <a href="https://www.ncei.noaa.gov/stormevents/" target="_blank" rel="noopener">NCEI Storm Events</a> for the counties shown after geocoding.</div>
+          <input type="file" id="sed-files" accept=".csv,.csv.gz" multiple style="display:none;">
+        </div>
+        <div id="sed-files-list" style="margin-top:8px;"></div>
+      </div>
+
+      <!-- ===== COUNTY INFO ===== -->
+      <div class="card" id="county-card" style="display:none;">
+        <h2>Counties for SED download</h2>
+        <div id="county-info" class="counties"></div>
+        <div class="hint" style="margin-top:8px;">Pull SED for these counties to capture events near county lines. Tag indicates which county the property is in.</div>
+      </div>
+
+      <!-- ===== HISTORY ===== -->
+      <div class="card">
+        <h2>Search history</h2>
+        <div id="history-list">
+          <div class="empty" style="padding:18px;"><div style="font-size:11px;">No saved searches yet.</div></div>
+        </div>
+        <button class="secondary" onclick="clearHistory()" style="width:100%;margin-top:8px;">Clear History</button>
+      </div>
+
+      <!-- AdSense slot 1 (sidebar) — fill data-ad-client / data-ad-slot to enable. -->
+      <div class="ad-slot" id="ad-slot-1">
+        <ins class="adsbygoogle" style="display:block" data-ad-client="YOUR_ADSENSE_PUBLISHER_ID" data-ad-slot="SLOT_ID" data-ad-format="auto" data-full-width-responsive="true"></ins>
+      </div>
+
+      <!-- ===== HELP ===== -->
+      <div class="card help">
+        <h2>How to use</h2>
+        <details>
+          <summary>Quick guide</summary>
+          <ol>
+            <li>Enter the property address.</li>
+            <li>Set the date range and search radius.</li>
+            <li>(Optional) Set a claim date — events within ± window get highlighted.</li>
+            <li>Click <b>Search</b>. Tool geocodes the address, identifies counties, and pulls live LSR data.</li>
+            <li>For finalized SED data, download from NCEI for the listed counties and drop the CSVs onto the SED upload box. The tool merges them with LSR using a cutoff (SED is authoritative through its latest report; LSR fills the gap).</li>
+            <li>Use the tabs to switch between Dashboard, Map, Table, and Raw Data.</li>
+          </ol>
+        </details>
+        <details>
+          <summary>About the data</summary>
+          <p><b>NWS LSR</b> (Local Storm Reports) — real-time spotter reports submitted to the issuing NWS Weather Forecast Office. Pulled live via Iowa State's IEM API.</p>
+          <p><b>NOAA SED</b> (Storm Events Database) — finalized, curated records published by NCEI with a 2–4 month lag. Includes events SED considers significant. Downloaded as yearly CSV by county.</p>
+          <p><b>Cutoff merge:</b> SED entries take priority through SED's latest BEGIN_DATE; LSR entries fill the gap after that. This avoids double-counting while keeping the most recent weeks/months covered.</p>
+        </details>
+        <details>
+          <summary>Severity classes</summary>
+          <ul>
+            <li><b>Hail:</b> &lt;0.75″ Minor · 0.75–1″ Marginal · 1–1.5″ Significant · 1.5–2.25″ Severe · ≥2.25″ Extreme</li>
+            <li><b>Wind:</b> &lt;50 mph Marginal · 50–58 Significant · 58–74 Severe · ≥74 Extreme</li>
+            <li><b>Tornado:</b> Severe (or by EF rating if known)</li>
+          </ul>
+        </details>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT (TABS) ===== -->
+    <section class="content">
+      <div class="tabs">
+        <button class="tab active" data-tab="dashboard">Dashboard</button>
+        <button class="tab" data-tab="map">Map</button>
+        <button class="tab" data-tab="table">Table</button>
+        <button class="tab" data-tab="raw">Raw Data</button>
+        <button class="tab" data-tab="about">About</button>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="tab-panel active" id="tab-dashboard">
+        <div id="dashboard-content">
+          <div class="card">
+            <div class="empty">
+              <div class="big">⛈️</div>
+              <div><strong>Run a search to see the dashboard.</strong></div>
+              <div style="margin-top:6px;font-size:12px;">Try the example: <a href="#" onclick="loadExample();return false;">Hillsboro TX hail outbreak, April 2018</a></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAP -->
+      <div class="tab-panel" id="tab-map">
+        <div class="card">
+          <div class="toolbar">
+            <h2>Map</h2>
+            <div class="actions">
+              <button class="secondary" onclick="exportExcel()">Export Excel</button>
+              <button class="secondary" onclick="saveAsImage('tab-map','map')">Save Map PNG</button>
+              <button class="secondary" onclick="window.print()">Print Report</button>
+              <button class="secondary" onclick="saveToHistory()">Save to History</button>
+            </div>
+          </div>
+          <div id="map"></div>
+          <div style="margin-top:10px;display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);">
+            <div><span class="map-legend"><span class="ring"></span>Radius rings (5/10/15 mi + your radius)</span></div>
+            <div>Marker color: event type (legend in map). Marker size: magnitude.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLE -->
+      <div class="tab-panel" id="tab-table">
+        <div class="card">
+          <div class="toolbar">
+            <h2 id="table-title">Storm Reports</h2>
+            <div class="actions">
+              <button class="secondary" onclick="exportExcel()">Export Excel</button>
+              <button class="secondary" onclick="saveAsImage('tab-table','storm-table')">Save Table PNG</button>
+              <button class="secondary" onclick="window.print()">Print Report</button>
+            </div>
+          </div>
+          <div id="table-content"></div>
+        </div>
+      </div>
+
+      <!-- RAW -->
+      <div class="tab-panel" id="tab-raw">
+        <div class="card">
+          <h2>Raw Data Files</h2>
+          <p style="font-size:13px;color:var(--muted);">Download the source records exactly as fetched, plus the merged combined dataset. Useful for archival and audit.</p>
+          <div id="raw-content">
+            <div class="empty"><div>Run a search first.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABOUT -->
+      <div class="tab-panel" id="tab-about">
+        <div class="card">
+          <h2>About this tool</h2>
+          <p>This is a forensic-research tool for property insurance claims. It parses two storm-event sources and helps you understand which weather events occurred close to a property and when.</p>
+
+          <h3>Data sources</h3>
+          <p><b>NWS Local Storm Reports (LSR)</b> — real-time, spotter-submitted reports collected by NWS Weather Forecast Offices. The tool fetches them live from <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a>'s archive (going back to ~2003). LSRs may be preliminary and contain estimation errors.</p>
+          <p><b>NOAA Storm Events Database (SED)</b> — finalized, curated event records published by NCEI with a 2–4 month lag. Two ways to feed SED into this tool:</p><ul><li><b>Auto-fetch</b> (recommended): point <code>SED_BASE_URL</code> in the HTML at a host where you publish per-state CSVs. The tool pulls them automatically each search. Use the bundled <code>fetch_sed.py</code> to refresh the data.</li><li><b>Manual upload</b>: drag SED CSVs from <a href="https://www.ncei.noaa.gov/stormevents/" target="_blank" rel="noopener">NCEI</a> onto the SED upload box. Use this when you want to research a one-off date or location without configuring hosting.</li></ul><p>Either way, SED + LSR are merged via a cutoff: SED is authoritative through its latest BEGIN_DATE; LSR fills the gap after that.</p>
+
+          <h3>County coverage</h3>
+          <p>SED data is organized by county. When a property is near a county line, events in adjacent counties may still fall within the search radius. To handle this, the tool detects the property's county <em>and</em> the counties touching the search circle, then prompts you to download SED for all of them.</p>
+
+          <h3>Coordinate system / projections</h3>
+          <p>Distances are computed using the Haversine formula (great-circle, mean Earth radius 3,958.8 mi). For radii under ~50 mi this is accurate within tenths of a mile.</p>
+
+          <h3>Output formats</h3>
+          <ul>
+            <li><b>Dashboard:</b> KPIs and charts across the full result set.</li>
+            <li><b>Map:</b> Property + radius rings (5/10/15 mi + your custom) + event markers, color-coded by type.</li>
+            <li><b>Table:</b> Sortable, filterable list with date, type, magnitude, distance, severity, source.</li>
+            <li><b>Raw Data:</b> Original LSR JSON, original SED CSV (passthrough), and a merged Combined CSV.</li>
+            <li><b>Excel export:</b> Multi-sheet .xlsx workbook (Report, Combined, LSR, SED) for archival.</li>
+            <li><b>Print:</b> Browser print → PDF for one-page claim reports.</li>
+          </ul>
+
+          <h3>Limitations</h3>
+          <ul>
+            <li>U.S. addresses only (Census Geocoder).</li>
+            <li>SED isn't queried automatically — you upload the CSVs. A backend would be required for fully-automated SED.</li>
+            <li>LSR magnitude isn't always populated (e.g., damage-only reports).</li>
+            <li>Search history is per-browser via localStorage — not synced across devices.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  Data: NWS LSR via Iowa Environmental Mesonet · NCEI Storm Events Database (user-uploaded) · Geocoding: U.S. Census Bureau · For research; verify findings against official NCEI Storm Events Database for legal/insurance use.
+</footer>
+
+<!-- Libraries -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   SED AUTO-FETCH CONFIG
+   Set SED_BASE_URL to the host where you uploaded the per-state SED CSVs
+   (output of fetch_sed.py). Files are expected at:
+     {SED_BASE_URL}/{2-LETTER-STATE}/details_{YEAR}.csv
+   Example: "https://my-sed-data.netlify.app/sed-data"
+   When this is empty, the app falls back to manual SED upload only.
+   ========================================================================= */
+const SED_BASE_URL = (() => {
+  const h = window.location.host;
+  if (!h || h.startsWith("localhost") || h.startsWith("127.0.0.1")) return "";
+  const path = window.location.pathname.replace(/\/[^/]*$/, "");
+  return window.location.origin + path + "/sed-data";
+})();
+
+const STATE_TO_ABBR = {
+  "ALABAMA":"AL","ALASKA":"AK","ARIZONA":"AZ","ARKANSAS":"AR","CALIFORNIA":"CA",
+  "COLORADO":"CO","CONNECTICUT":"CT","DELAWARE":"DE","DISTRICT OF COLUMBIA":"DC",
+  "FLORIDA":"FL","GEORGIA":"GA","HAWAII":"HI","IDAHO":"ID","ILLINOIS":"IL",
+  "INDIANA":"IN","IOWA":"IA","KANSAS":"KS","KENTUCKY":"KY","LOUISIANA":"LA",
+  "MAINE":"ME","MARYLAND":"MD","MASSACHUSETTS":"MA","MICHIGAN":"MI","MINNESOTA":"MN",
+  "MISSISSIPPI":"MS","MISSOURI":"MO","MONTANA":"MT","NEBRASKA":"NE","NEVADA":"NV",
+  "NEW HAMPSHIRE":"NH","NEW JERSEY":"NJ","NEW MEXICO":"NM","NEW YORK":"NY",
+  "NORTH CAROLINA":"NC","NORTH DAKOTA":"ND","OHIO":"OH","OKLAHOMA":"OK","OREGON":"OR",
+  "PENNSYLVANIA":"PA","PUERTO RICO":"PR","RHODE ISLAND":"RI","SOUTH CAROLINA":"SC",
+  "SOUTH DAKOTA":"SD","TENNESSEE":"TN","TEXAS":"TX","UTAH":"UT","VERMONT":"VT",
+  "VIRGINIA":"VA","WASHINGTON":"WA","WEST VIRGINIA":"WV","WISCONSIN":"WI","WYOMING":"WY"
+};
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const state = {
+  ctx: null,           // current search context
+  rawLSR: null,        // raw LSR features as fetched
+  sedFiles: [],        // [{name, rows: [...]}]
+  combinedAll: [],     // full merged + normalized event set, before filtering
+  filtered: [],        // current filtered view
+  counties: [],        // [{name, state, fips, isPrimary}]
+  map: null,
+  layers: { rings: null, markers: null, center: null },
+  charts: {},
+};
+
+/* =========================================================================
+   DEFAULTS
+   ========================================================================= */
+(function setDefaults(){
+  const today = new Date();
+  const oneYearAgo = new Date(today);
+  oneYearAgo.setFullYear(today.getFullYear() - 1);
+  document.getElementById('start-date').valueAsDate = oneYearAgo;
+  document.getElementById('end-date').valueAsDate = today;
+})();
+
+/* =========================================================================
+   SEVERITY / NORMALIZATION
+   ========================================================================= */
+const HAIL_THRESHOLDS = [[2.25,'Extreme'],[1.5,'Severe'],[1.0,'Significant'],[0.75,'Marginal']];
+const WIND_THRESHOLDS = [[74,'Extreme'],[58,'Severe'],[50,'Significant']];
+
+// Normalize event type -> canonical category.
+// Categories used for filtering and color: Hail, Wind, Tornado, Flood, Lightning, Winter, Other.
+function categorize(type){
+  const t = (type || '').toUpperCase();
+  if (t.includes('HAIL')) return 'Hail';
+  if (t.includes('TORNADO') || t.includes('FUNNEL')) return 'Tornado';
+  if (t.includes('TSTM') || t.includes('THUNDERSTORM') || t.includes('WIND') || t.includes('WND') || t.includes('GUST')) return 'Wind';
+  if (t.includes('FLOOD') || t.includes('FLD')) return 'Flood';
+  if (t.includes('LIGHTNING') || t.includes('LTG')) return 'Lightning';
+  if (t.includes('SNOW') || t.includes('ICE') || t.includes('BLIZZARD') || t.includes('FREEZ') || t.includes('WINTER') || t.includes('SLEET')) return 'Winter';
+  return 'Other';
+}
+
+function classifySeverity(type, mag){
+  const cat = categorize(type);
+  const m = parseFloat(mag);
+  if (cat === 'Hail') {
+    if (!isNaN(m)) for (const [thr, lbl] of HAIL_THRESHOLDS) if (m >= thr) return lbl;
+    return 'Minor';
+  }
+  if (cat === 'Wind') {
+    if (!isNaN(m)) for (const [thr, lbl] of WIND_THRESHOLDS) if (m >= thr) return lbl;
+    return (type || '').toUpperCase().includes('DMG') ? 'Significant' : 'Marginal';
+  }
+  if (cat === 'Tornado') return 'Severe';
+  if (cat === 'Flood') return 'Significant';
+  if (cat === 'Lightning') return 'Marginal';
+  if (cat === 'Winter') return 'Marginal';
+  return 'Other';
+}
+
+function isLikelyDamaging(type, mag){
+  const cat = categorize(type);
+  const m = parseFloat(mag);
+  if (cat === 'Tornado') return true;
+  if (cat === 'Hail' && !isNaN(m) && m >= 1.0) return true;
+  if (cat === 'Wind' && !isNaN(m) && m >= 58) return true;
+  if (cat === 'Wind' && (type || '').toUpperCase().includes('DMG')) return true;
+  return false;
+}
+
+const CATEGORY_COLORS = {
+  'Hail':'#3498db','Wind':'#9b59b6','Tornado':'#c0392b',
+  'Flood':'#1abc9c','Lightning':'#f1c40f','Winter':'#7f8c8d','Other':'#95a5a6'
+};
+
+/* =========================================================================
+   GEO MATH
+   ========================================================================= */
+function haversineMi(lat1, lon1, lat2, lon2){
+  const R = 3958.8;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(Math.min(1, a)));
+}
+function bearing16(lat1, lon1, lat2, lon2){
+  const toRad=d=>d*Math.PI/180, toDeg=r=>r*180/Math.PI;
+  const phi1=toRad(lat1), phi2=toRad(lat2);
+  const dlam=toRad(lon2-lon1);
+  const y=Math.sin(dlam)*Math.cos(phi2);
+  const x=Math.cos(phi1)*Math.sin(phi2)-Math.sin(phi1)*Math.cos(phi2)*Math.cos(dlam);
+  const b=(toDeg(Math.atan2(y,x))+360)%360;
+  return ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(b/22.5)%16];
+}
+function bboxFromCenter(lat, lon, radiusMi){
+  const dLat = radiusMi / 69.0;
+  const dLon = radiusMi / (69.0 * Math.cos(lat * Math.PI / 180));
+  return { west: lon - dLon, east: lon + dLon, south: lat - dLat, north: lat + dLat };
+}
+// Project a point N miles in cardinal direction from (lat, lon)
+function offsetPoint(lat, lon, miNorth, miEast){
+  const dLat = miNorth / 69.0;
+  const dLon = miEast / (69.0 * Math.cos(lat * Math.PI / 180));
+  return { lat: lat + dLat, lon: lon + dLon };
+}
+
+/* =========================================================================
+   FORMATTING
+   ========================================================================= */
+function fmtDate(d){ if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? d : dt.toISOString().slice(0,10); }
+function fmtDateTime(d){ if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? d : dt.toISOString().slice(0,16).replace('T',' ') + ' UTC'; }
+function escapeHtml(s){ if (s == null) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+function setStatus(msg, type='info'){
+  const el = document.getElementById('status');
+  el.className = 'status ' + type; el.textContent = msg;
+}
+function clearStatus(){ document.getElementById('status').className = 'status'; }
+
+/* =========================================================================
+   GEOCODING (Census Bureau onelineaddress)
+   ========================================================================= */
+/* JSONP helper — Census Geocoder doesn't return CORS headers,
+   so fetch() is blocked. JSONP works by loading the response as a
+   <script> tag, which has no CORS restrictions. */
+let _jsonpCounter = 0;
+function jsonp(baseUrl, params = {}, timeoutMs = 20000){
+  return new Promise((resolve, reject) => {
+    const cbName = `_jsonpCb_${Date.now()}_${++_jsonpCounter}`;
+    const qs = Object.entries({ ...params, format: 'jsonp', callback: cbName })
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+    const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + qs;
+    const script = document.createElement('script');
+    let done = false;
+
+    function cleanup(){
+      if (done) return;
+      done = true;
+      try { delete window[cbName]; } catch { window[cbName] = undefined; }
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error('Network error or service unavailable.')); };
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Request timed out.')); }, timeoutMs);
+
+    script.src = url;
+    document.head.appendChild(script);
+  });
+}
+
+async function geocode(address){
+  let data;
+  try {
+    data = await jsonp('https://geocoding.geo.census.gov/geocoder/locations/onelineaddress', {
+      address, benchmark: 'Public_AR_Current',
+    });
+  } catch (e) {
+    throw new Error(networkErrorHint('Census geocoder', e));
+  }
+  const matches = data?.result?.addressMatches || [];
+  if (!matches.length) throw new Error('No address match. Try adding city, state, or ZIP.');
+  const m = matches[0];
+  return { lat: m.coordinates.y, lon: m.coordinates.x, matched: m.matchedAddress };
+}
+
+// Translate generic fetch / JSONP failures into actionable messages.
+function networkErrorHint(serviceName, err){
+  if (location.protocol === 'file:') {
+    return `Couldn't reach ${serviceName}. The browser is blocking the request because the app is running from a local file (file://). `
+         + `Run serve.bat (in the same folder) and use the page at http://localhost:8000/ instead.`;
+  }
+  const detail = err && err.message ? ` (${err.message})` : '';
+  return `Couldn't reach ${serviceName}${detail}. Check your internet connection or corporate firewall.`;
+}
+
+/* =========================================================================
+   COUNTY LOOKUP (Census Geographies coordinates endpoint)
+   We probe center + 4 perimeter points (N/S/E/W of search radius) to
+   capture adjacent counties when the property is near a county line.
+   ========================================================================= */
+async function countyForCoord(lat, lon){
+  try {
+    const data = await jsonp('https://geocoding.geo.census.gov/geocoder/geographies/coordinates', {
+      x: lon, y: lat,
+      benchmark: 'Public_AR_Current',
+      vintage: 'Current_Current',
+      layers: 'Counties',
+    });
+    const c = data?.result?.geographies?.Counties?.[0];
+    if (!c) return null;
+    return {
+      name: c.NAME || c.BASENAME || c.GEOID,
+      state: c.STATE_NAME || c.STATE || '',
+      fips: c.GEOID || (c.STATE + (c.COUNTY || '')),
+    };
+  } catch { return null; }
+}
+async function findCounties(lat, lon, radiusMi){
+  const points = [
+    { lat, lon, primary: true },
+    offsetPoint(lat, lon,  radiusMi, 0),
+    offsetPoint(lat, lon, -radiusMi, 0),
+    offsetPoint(lat, lon, 0,  radiusMi),
+    offsetPoint(lat, lon, 0, -radiusMi),
+    offsetPoint(lat, lon,  radiusMi*0.7,  radiusMi*0.7),
+    offsetPoint(lat, lon, -radiusMi*0.7,  radiusMi*0.7),
+    offsetPoint(lat, lon,  radiusMi*0.7, -radiusMi*0.7),
+    offsetPoint(lat, lon, -radiusMi*0.7, -radiusMi*0.7),
+  ];
+  const results = await Promise.all(points.map(p => countyForCoord(p.lat, p.lon)));
+  const seen = new Map();
+  let primaryFips = null;
+  results.forEach((c, i) => {
+    if (!c) return;
+    if (i === 0) primaryFips = c.fips;
+    if (!seen.has(c.fips)) seen.set(c.fips, c);
+  });
+  const out = Array.from(seen.values()).map(c => ({ ...c, isPrimary: c.fips === primaryFips }));
+  out.sort((a, b) => (b.isPrimary - a.isPrimary) || a.name.localeCompare(b.name));
+  return out;
+}
+
+/* =========================================================================
+   LSR FETCH (IEM GeoJSON)
+   ========================================================================= */
+async function autoFetchSED(stateAbbrs, startYear, endYear){
+  if (!SED_BASE_URL) return 0;
+  let rowsAdded = 0;
+  const tasks = [];
+  for (const abbr of stateAbbrs) {
+    for (let y = startYear; y <= endYear; y++) {
+      const url = `${SED_BASE_URL}/${abbr}/details_${y}.csv`;
+      tasks.push(fetch(url, { cache: "no-cache" })
+        .then(r => r.ok ? r.text().then(t => ({ url, ok: true, text: t, name: `${abbr}/${y}.csv` })) : { url, ok: false })
+        .catch(() => ({ url, ok: false })));
+    }
+  }
+  const results = await Promise.all(tasks);
+  for (const r of results) {
+    if (!r.ok) continue;
+    try {
+      const rows = parseSEDCsv(r.text);
+      if (!rows.length) continue;
+      const existing = state.sedFiles.find(f => f.name === r.name && f.auto);
+      if (existing) { existing.rows = rows; existing.original = r.text; }
+      else { state.sedFiles.push({ name: r.name, rows, original: r.text, auto: true }); }
+      rowsAdded += rows.length;
+    } catch {}
+  }
+  return rowsAdded;
+}
+
+async function fetchLSRs(lat, lon, radiusMi, startDate, endDate){
+  const bb = bboxFromCenter(lat, lon, radiusMi * 1.1);
+  const sts = `${startDate}T00:00Z`;
+  const ets = `${endDate}T23:59Z`;
+  const url = `https://mesonet.agron.iastate.edu/geojson/lsr.geojson`
+            + `?sts=${sts}&ets=${ets}`
+            + `&west=${bb.west.toFixed(4)}&east=${bb.east.toFixed(4)}`
+            + `&south=${bb.south.toFixed(4)}&north=${bb.north.toFixed(4)}`;
+  let r;
+  try {
+    r = await fetch(url);
+  } catch (e) {
+    throw new Error(networkErrorHint('Iowa Mesonet (IEM) LSR API'));
+  }
+  if (!r.ok) throw new Error(`IEM HTTP ${r.status}`);
+  const fc = await r.json();
+  return { features: fc.features || [], url };
+}
+
+function lsrFeatureToEvent(f){
+  const p = f.properties || {};
+  const g = f.geometry || {};
+  const c = g.coordinates || [null, null];
+  // IEM /geojson/lsr.geojson uses lowercase keys; the older /cgi-bin endpoint
+  // uses uppercase. Accept both, preferring lowercase since that's what the
+  // current API actually returns.
+  const pick = (...keys) => {
+    for (const k of keys) {
+      if (p[k] !== undefined && p[k] !== null && p[k] !== '') return p[k];
+    }
+    return undefined;
+  };
+  const lon = pick('lon', 'LON') ?? c[0];
+  const lat = pick('lat', 'LAT') ?? c[1];
+  if (lat == null || lon == null) return null;
+
+  // typetext is the human-readable label ("HAIL"); type is just the
+  // single-letter code ("H"). Always prefer typetext.
+  const type = pick('typetext', 'TYPETEXT') || pick('type', 'TYPE') || '';
+
+  // magf is the formatted numeric magnitude; magnitude may be a string.
+  const magRaw = pick('magf', 'magnitude', 'MAG');
+  const magNum = (magRaw !== undefined) ? parseFloat(magRaw) : null;
+  const mag = (magNum != null && !isNaN(magNum)) ? magNum : null;
+
+  const valid = pick('valid', 'VALID');
+  return {
+    valid, date: valid ? new Date(valid) : null,
+    type, magnitude: mag,
+    lat: Number(lat), lon: Number(lon),
+    city:   pick('city', 'CITY') || '',
+    county: pick('county', 'COUNTY') || '',
+    state:  pick('state', 'STATE', 'st', 'ST') || '',
+    source: 'LSR',
+    sourceDetail: pick('source', 'SOURCE') || '',
+    remark: pick('remark', 'REMARK') || '',
+    qualify: pick('qualifier', 'QUALIFIER', 'qualify', 'QUALIFY') || '',
+    wfo: pick('wfo', 'WFO') || '',
+  };
+}
+
+/* =========================================================================
+   SED CSV PARSE (NCEI Storm Events "details" format)
+   Columns of interest: BEGIN_DATE_TIME, EVENT_TYPE, MAGNITUDE, MAGNITUDE_TYPE,
+   TOR_F_SCALE, BEGIN_LAT, BEGIN_LON, STATE, CZ_NAME, EVENT_NARRATIVE,
+   EPISODE_NARRATIVE, SOURCE.
+   ========================================================================= */
+function parseSEDCsv(text){
+  const result = Papa.parse(text, {
+    header: true, skipEmptyLines: true, dynamicTyping: false,
+  });
+  if (result.errors && result.errors.length) {
+    console.warn('SED parse warnings:', result.errors.slice(0, 3));
+  }
+  const rows = [];
+  for (const r of result.data) {
+    const lat = parseFloat(r.BEGIN_LAT);
+    const lon = parseFloat(r.BEGIN_LON);
+    if (isNaN(lat) || isNaN(lon)) continue;
+    // BEGIN_DATE_TIME format: "DD-MMM-YY HH:MM:SS" e.g., "13-APR-18 18:30:00"
+    const dt = parseSedDate(r.BEGIN_DATE_TIME) || parseSedYearMonth(r.BEGIN_YEARMONTH, r.BEGIN_DAY, r.BEGIN_TIME);
+    if (!dt) continue;
+    const mag = (r.MAGNITUDE !== undefined && r.MAGNITUDE !== '' && r.MAGNITUDE != null) ? parseFloat(r.MAGNITUDE) : null;
+    rows.push({
+      valid: dt.toISOString(), date: dt,
+      type: r.EVENT_TYPE || '',
+      magnitude: isNaN(mag) ? null : mag,
+      magType: r.MAGNITUDE_TYPE || '',
+      torScale: r.TOR_F_SCALE || '',
+      lat, lon,
+      city: r.BEGIN_LOCATION || '', county: r.CZ_NAME || '', state: r.STATE || '',
+      source: 'SED', sourceDetail: r.SOURCE || '',
+      remark: r.EVENT_NARRATIVE || r.EPISODE_NARRATIVE || '',
+      qualify: r.MAGNITUDE_TYPE || '',
+      wfo: r.WFO || '',
+    });
+  }
+  return rows;
+}
+function parseSedDate(s){
+  if (!s) return null;
+  // "13-APR-18 18:30:00"
+  const m = String(s).match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (!m) {
+    const direct = new Date(s);
+    return isNaN(direct) ? null : direct;
+  }
+  const months = { JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11 };
+  const day = parseInt(m[1], 10);
+  const mon = months[m[2].toUpperCase()];
+  let year = parseInt(m[3], 10);
+  if (year < 100) year += year < 50 ? 2000 : 1900;
+  return new Date(Date.UTC(year, mon, day, parseInt(m[4],10), parseInt(m[5],10), parseInt(m[6],10)));
+}
+function parseSedYearMonth(ym, day, time){
+  if (!ym) return null;
+  const yr = parseInt(String(ym).slice(0, 4), 10);
+  const mo = parseInt(String(ym).slice(4, 6), 10) - 1;
+  const dd = parseInt(day || 1, 10);
+  let hr = 0, mn = 0;
+  if (time) {
+    const t = String(time).padStart(4, '0');
+    hr = parseInt(t.slice(0, 2), 10); mn = parseInt(t.slice(2, 4), 10);
+  }
+  return new Date(Date.UTC(yr, mo, dd, hr, mn, 0));
+}
+
+/* =========================================================================
+   MERGE LSR + SED USING CUTOFF
+   SED is authoritative through SED's latest event date (within the user's
+   requested range). LSR fills the gap after that.
+   ========================================================================= */
+function mergeWithCutoff(lsrEvents, sedEvents, ctx){
+  let cutoff = null;
+  if (sedEvents && sedEvents.length) {
+    cutoff = new Date(Math.max(...sedEvents.map(e => e.date.getTime())));
+  }
+  const out = [];
+  for (const e of (sedEvents || [])) out.push(e);
+  for (const e of (lsrEvents || [])) {
+    if (cutoff && e.date && e.date <= cutoff) continue; // SED owns this range
+    out.push(e);
+  }
+  // Compute distance and per-event flags relative to ctx
+  for (const e of out) {
+    e.distance = haversineMi(ctx.lat, ctx.lon, e.lat, e.lon);
+    e.bearing = bearing16(ctx.lat, ctx.lon, e.lat, e.lon);
+    e.category = categorize(e.type);
+    e.severity = classifySeverity(e.type, e.magnitude);
+    e.damaging = isLikelyDamaging(e.type, e.magnitude);
+    if (ctx.claimDate) {
+      const cd = new Date(ctx.claimDate + 'T12:00Z');
+      const dd = Math.abs((e.date - cd) / (1000*60*60*24));
+      e.inClaimWindow = dd <= ctx.claimWindow;
+    } else {
+      e.inClaimWindow = null;
+    }
+  }
+  // Strict radius filter (bbox was padded)
+  return out.filter(e => e.distance <= ctx.radius);
+}
+
+/* =========================================================================
+   FILTERING
+   ========================================================================= */
+function getActiveCategories(){
+  const set = new Set();
+  document.querySelectorAll('#type-filter input[type=checkbox]:checked').forEach(cb => set.add(cb.value));
+  return set;
+}
+function applyFilters(){
+  const cats = getActiveCategories();
+  state.filtered = state.combinedAll.filter(e => cats.has(e.category));
+  state.filtered.sort((a, b) => a.distance - b.distance);
+  renderAll();
+}
+
+/* =========================================================================
+   RENDERING — DASHBOARD
+   ========================================================================= */
+function renderDashboard(){
+  const ctx = state.ctx;
+  const evts = state.filtered;
+  if (!ctx) return;
+
+  const total = evts.length;
+  const byCat = {};
+  for (const e of evts) byCat[e.category] = (byCat[e.category] || 0) + 1;
+  const damaging = evts.filter(e => e.damaging).length;
+  const inWindow = ctx.claimDate ? evts.filter(e => e.inClaimWindow).length : null;
+  const maxHail = evts.filter(e => e.category === 'Hail' && e.magnitude != null).reduce((m, e) => Math.max(m, e.magnitude), 0);
+  const maxWind = evts.filter(e => e.category === 'Wind' && e.magnitude != null).reduce((m, e) => Math.max(m, e.magnitude), 0);
+  const closest = evts.length ? evts[0].distance : null;
+  const sedCount = evts.filter(e => e.source === 'SED').length;
+  const lsrCount = evts.filter(e => e.source === 'LSR').length;
+
+  // KPIs
+  const kpiHtml = `
+    <div class="kpi"><div class="num">${total}</div><div class="lbl">Events</div><div class="sub">SED ${sedCount} · LSR ${lsrCount}</div></div>
+    <div class="kpi"><div class="num">${byCat.Hail || 0}</div><div class="lbl">Hail</div></div>
+    <div class="kpi"><div class="num">${byCat.Wind || 0}</div><div class="lbl">Wind</div></div>
+    <div class="kpi"><div class="num">${byCat.Tornado || 0}</div><div class="lbl">Tornado</div></div>
+    <div class="kpi"><div class="num">${maxHail ? maxHail.toFixed(2) + '"' : '—'}</div><div class="lbl">Max hail</div></div>
+    <div class="kpi"><div class="num">${maxWind ? maxWind + ' mph' : '—'}</div><div class="lbl">Max gust</div></div>
+    <div class="kpi"><div class="num">${damaging}</div><div class="lbl">Likely damaging</div></div>
+    <div class="kpi"><div class="num">${closest != null ? closest.toFixed(2) + ' mi' : '—'}</div><div class="lbl">Closest</div></div>
+  `;
+
+  const container = document.getElementById('dashboard-content');
+  container.innerHTML = `
+    <div class="card">
+      <div class="toolbar">
+        <h2>${escapeHtml(ctx.matchedAddress)}</h2>
+        <div class="actions">
+          <button class="secondary" onclick="saveAsImage('tab-dashboard','dashboard')">Save Dashboard PNG</button>
+          <button class="secondary" onclick="window.print()">Print</button>
+        </div>
+      </div>
+      <p style="margin:0 0 12px;font-size:13px;color:var(--muted);">
+        ${ctx.lat.toFixed(4)}, ${ctx.lon.toFixed(4)} ·
+        ${ctx.radius} mi radius ·
+        ${ctx.start} → ${ctx.end}
+        ${ctx.claimDate ? ' · Claim date <b>' + ctx.claimDate + '</b> (± ' + ctx.claimWindow + ' d)' : ''}
+      </p>
+      <div class="kpis">${kpiHtml}</div>
+      ${inWindow != null ? `<div class="status warn" style="display:block;">${inWindow} event${inWindow===1?'':'s'} within ± ${ctx.claimWindow} day${ctx.claimWindow===1?'':'s'} of claim date.</div>` : ''}
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-box"><h3>Events per year</h3><canvas id="chart-year"></canvas></div>
+      <div class="chart-box"><h3>Events by type</h3><canvas id="chart-type"></canvas></div>
+      <div class="chart-box"><h3>Hail size distribution</h3><canvas id="chart-hail"></canvas></div>
+      <div class="chart-box"><h3>Distance distribution</h3><canvas id="chart-dist"></canvas></div>
+    </div>
+  `;
+
+  drawCharts(evts);
+}
+
+function drawCharts(evts){
+  // destroy any prior
+  Object.values(state.charts).forEach(c => c.destroy && c.destroy());
+  state.charts = {};
+
+  // by year
+  const yearCounts = {};
+  for (const e of evts) {
+    const y = e.date ? e.date.getUTCFullYear() : 'Unknown';
+    yearCounts[y] = (yearCounts[y] || 0) + 1;
+  }
+  const years = Object.keys(yearCounts).sort();
+  state.charts.year = new Chart(document.getElementById('chart-year'), {
+    type: 'bar',
+    data: {
+      labels: years,
+      datasets: [{ label: 'Events', data: years.map(y => yearCounts[y]), backgroundColor: '#1f4e78' }],
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} },
+  });
+
+  // by type
+  const cats = ['Hail','Wind','Tornado','Flood','Lightning','Winter','Other'];
+  const catCounts = cats.map(c => evts.filter(e => e.category === c).length);
+  state.charts.type = new Chart(document.getElementById('chart-type'), {
+    type: 'bar',
+    data: {
+      labels: cats,
+      datasets: [{ label:'Events', data: catCounts, backgroundColor: cats.map(c => CATEGORY_COLORS[c]) }],
+    },
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} },
+  });
+
+  // hail bucket distribution
+  const hailBuckets = ['<0.75″','0.75–1.0','1.0–1.5','1.5–2.25','≥2.25″'];
+  const hailVals = [0, 0, 0, 0, 0];
+  for (const e of evts) {
+    if (e.category !== 'Hail' || e.magnitude == null) continue;
+    const m = e.magnitude;
+    if (m < 0.75) hailVals[0]++;
+    else if (m < 1.0) hailVals[1]++;
+    else if (m < 1.5) hailVals[2]++;
+    else if (m < 2.25) hailVals[3]++;
+    else hailVals[4]++;
+  }
+  state.charts.hail = new Chart(document.getElementById('chart-hail'), {
+    type:'bar',
+    data:{ labels: hailBuckets, datasets:[{ label:'Hail count', data: hailVals, backgroundColor:'#3498db' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} },
+  });
+
+  // distance distribution buckets (5 mi each, up to ctx radius rounded)
+  const radius = state.ctx.radius;
+  const bucketSize = Math.max(1, Math.ceil(radius / 6));
+  const distBuckets = []; const distLabels = [];
+  for (let i = 0; i < radius; i += bucketSize) {
+    distBuckets.push(0);
+    distLabels.push(`${i}–${Math.min(radius, i + bucketSize)}`);
+  }
+  for (const e of evts) {
+    const idx = Math.min(distBuckets.length - 1, Math.floor(e.distance / bucketSize));
+    distBuckets[idx]++;
+  }
+  state.charts.dist = new Chart(document.getElementById('chart-dist'), {
+    type:'bar',
+    data:{ labels: distLabels, datasets:[{ label:'Events by distance (mi)', data: distBuckets, backgroundColor:'#27ae60' }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} },
+  });
+}
+
+/* =========================================================================
+   RENDERING — MAP
+   ========================================================================= */
+function renderMap(){
+  const ctx = state.ctx;
+  if (!ctx) return;
+  const evts = state.filtered;
+
+  if (!state.map) {
+    state.map = L.map('map').setView([ctx.lat, ctx.lon], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(state.map);
+  } else {
+    state.map.setView([ctx.lat, ctx.lon], 12);
+  }
+  // Clean prior layers
+  ['rings','markers','center'].forEach(k => {
+    if (state.layers[k]) { state.map.removeLayer(state.layers[k]); state.layers[k] = null; }
+  });
+
+  // Rings group
+  const ringGroup = L.layerGroup();
+  const stdRings = [5, 10, 15];
+  for (const r of stdRings) {
+    L.circle([ctx.lat, ctx.lon], {
+      radius: r * 1609.344, color: '#1f4e78', weight: 1, dashArray:'4,4',
+      fillColor: '#1f4e78', fillOpacity: 0.02
+    }).bindTooltip(`${r} mi`, { permanent: false }).addTo(ringGroup);
+  }
+  // User radius (solid line) if different from standard rings
+  if (!stdRings.includes(ctx.radius)) {
+    L.circle([ctx.lat, ctx.lon], {
+      radius: ctx.radius * 1609.344, color:'#c0392b', weight:2,
+      fillColor:'#c0392b', fillOpacity:0.04
+    }).bindTooltip(`Your radius: ${ctx.radius} mi`, { permanent: false }).addTo(ringGroup);
+  } else {
+    // Ensure user's standard ring is rendered with emphasis
+    L.circle([ctx.lat, ctx.lon], {
+      radius: ctx.radius * 1609.344, color:'#c0392b', weight:2,
+      fillColor:'#c0392b', fillOpacity:0.04
+    }).bindTooltip(`Your radius: ${ctx.radius} mi`, { permanent: false }).addTo(ringGroup);
+  }
+  ringGroup.addTo(state.map);
+  state.layers.rings = ringGroup;
+
+  // Center marker
+  state.layers.center = L.marker([ctx.lat, ctx.lon])
+    .addTo(state.map)
+    .bindPopup(`<b>${escapeHtml(ctx.matchedAddress)}</b><br>${ctx.lat.toFixed(4)}, ${ctx.lon.toFixed(4)}`);
+
+  // Event markers
+  const mg = L.layerGroup();
+  for (const e of evts) {
+    const color = CATEGORY_COLORS[e.category] || '#888';
+    const baseR = e.damaging ? 6 : 4;
+    const magR = (e.magnitude != null) ? Math.min(8, Math.log(e.magnitude + 1) * 3) : 0;
+    const m = L.circleMarker([e.lat, e.lon], {
+      radius: baseR + magR, color: '#fff', weight: 1, fillColor: color, fillOpacity: 0.85
+    });
+    const popupHtml = `
+      <b>${escapeHtml(e.type)}</b> ${e.magnitude != null ? '(' + e.magnitude + ')' : ''}<br>
+      ${fmtDateTime(e.valid)}<br>
+      ${escapeHtml(e.city)} ${escapeHtml(e.county)}<br>
+      <small>Distance: ${e.distance.toFixed(2)} mi · Severity: ${e.severity} · Source: ${e.source}</small>
+      ${e.remark ? '<br><small><i>' + escapeHtml(String(e.remark).slice(0, 240)) + '</i></small>' : ''}
+    `;
+    m.bindPopup(popupHtml).addTo(mg);
+  }
+  mg.addTo(state.map);
+  state.layers.markers = mg;
+
+  // Custom legend
+  if (!state.map._customLegend) {
+    const legend = L.control({ position: 'topright' });
+    legend.onAdd = function(){
+      const div = L.DomUtil.create('div', 'map-legend');
+      div.innerHTML = `
+        <b>Event types</b><br>
+        ${Object.entries(CATEGORY_COLORS).map(([k, v]) =>
+          `<span class="ev" style="background:${v}"></span>${k}`).join('<br>')}
+        <hr style="margin:5px 0;border:none;border-top:1px solid #ddd;">
+        <b>Rings</b> (5/10/15 mi)<br>
+        Solid red = your radius
+      `;
+      return div;
+    };
+    legend.addTo(state.map);
+    state.map._customLegend = legend;
+  }
+
+  // Fit bounds
+  if (evts.length || ctx.radius) {
+    const layers = [];
+    if (state.layers.rings) layers.push(state.layers.rings);
+    if (state.layers.markers) layers.push(state.layers.markers);
+    const fg = L.featureGroup(layers.flatMap(g => g.getLayers()));
+  }
+  setTimeout(() => {
+    state.map.invalidateSize();
+    const ls = [];
+    if (state.layers.rings)   ls.push(...state.layers.rings.getLayers());
+    if (state.layers.markers) ls.push(...state.layers.markers.getLayers());
+    if (ls.length) state.map.fitBounds(L.featureGroup(ls).getBounds().pad(0.05), { maxZoom: 12 });
+  }, 60);
+}
+
+/* =========================================================================
+   RENDERING — TABLE
+   ========================================================================= */
+let sortField = 'distance';
+let sortAsc = true;
+function renderTable(){
+  const ctx = state.ctx;
+  const evts = state.filtered;
+  const container = document.getElementById('table-content');
+  document.getElementById('table-title').textContent = `Storm Reports (${evts.length}) — sorted by ${sortField}`;
+
+  if (!ctx) {
+    container.innerHTML = `<div class="empty"><div>Run a search first.</div></div>`;
+    return;
+  }
+  if (!evts.length) {
+    container.innerHTML = `<div class="empty"><div>No events match the current filters.</div><div class="hint" style="margin-top:6px;">Try expanding the radius or enabling more event types.</div></div>`;
+    return;
+  }
+
+  const headers = [
+    ['date','Date (UTC)'], ['source','Source'], ['type','Type'],
+    ['magnitude','Mag'], ['distance','Dist (mi)'], ['bearing','Dir'],
+    ['severity','Severity'], ['city','Station'], ['qualify','Qualify'],
+  ];
+
+  container.innerHTML = `
+    <div class="table-wrap">
+      <table class="results" id="results-table">
+        <thead><tr>${headers.map(([k, lbl]) =>
+          `<th data-sort="${k}">${lbl}<span class="arrow">↕</span></th>`).join('')}</tr></thead>
+        <tbody>
+          ${evts.map(e => `
+            <tr class="${e.inClaimWindow ? 'in-window' : ''}">
+              <td>${fmtDateTime(e.valid)}</td>
+              <td><span class="source-tag src-${e.source}">${e.source}</span></td>
+              <td>${escapeHtml(e.type)}</td>
+              <td>${e.magnitude != null ? e.magnitude : ''}</td>
+              <td>${e.distance.toFixed(2)}</td>
+              <td><b>${escapeHtml(e.bearing || '')}</b></td>
+              <td><span class="severity sev-${e.severity.toLowerCase()}">${e.severity}</span></td>
+              <td>${escapeHtml(e.city)}</td>
+              <td>${escapeHtml(e.qualify)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  bindSorting();
+}
+function bindSorting(){
+  document.querySelectorAll('#results-table th[data-sort]').forEach(th => {
+    th.onclick = () => {
+      const f = th.getAttribute('data-sort');
+      if (sortField === f) sortAsc = !sortAsc; else { sortField = f; sortAsc = true; }
+      state.filtered.sort((a, b) => {
+        let av = a[f], bv = b[f];
+        if (av == null) av = '';
+        if (bv == null) bv = '';
+        if (av < bv) return sortAsc ? -1 : 1;
+        if (av > bv) return sortAsc ? 1 : -1;
+        return 0;
+      });
+      renderTable();
+    };
+  });
+}
+
+/* =========================================================================
+   RENDERING — RAW DATA
+   ========================================================================= */
+function renderRaw(){
+  const ctx = state.ctx;
+  const container = document.getElementById('raw-content');
+  if (!ctx) { container.innerHTML = `<div class="empty"><div>Run a search first.</div></div>`; return; }
+
+  const lsrSize = state.rawLSR ? JSON.stringify(state.rawLSR).length : 0;
+  const sedTotal = state.sedFiles.reduce((s, f) => s + f.rows.length, 0);
+  const lsrCount = (state.rawLSR && state.rawLSR.features) ? state.rawLSR.features.length : 0;
+
+  container.innerHTML = `
+    <h3>Original NWS LSR data (live fetch)</h3>
+    <p style="font-size:13px;color:var(--muted);">${lsrCount} raw LSR features · ${(lsrSize/1024).toFixed(1)} KB</p>
+    <button class="secondary" onclick="downloadFile('lsr_raw.json', JSON.stringify(state.rawLSR, null, 2), 'application/json')">Download LSR JSON</button>
+    <button class="secondary" onclick="downloadLSRCsv()">Download LSR CSV</button>
+
+    <h3>NOAA SED uploads (passthrough)</h3>
+    ${state.sedFiles.length === 0 ?
+      `<p style="font-size:13px;color:var(--muted);">No SED files uploaded yet. Drop CSVs onto the SED box in the sidebar.</p>` :
+      state.sedFiles.map((f, i) => `
+        <div style="margin:8px 0;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:5px;padding:8px 12px;">
+          <div>
+            <b>${escapeHtml(f.name)}</b>
+            <div style="font-size:12px;color:var(--muted);">${f.rows.length} rows parsed</div>
+          </div>
+          <button class="secondary" onclick="downloadSEDFile(${i})">Download</button>
+        </div>
+      `).join('')
+    }
+    <p style="font-size:13px;color:var(--muted);"><b>${sedTotal}</b> total SED rows ingested.</p>
+
+    <h3>Combined Events</h3>
+    <p style="font-size:13px;color:var(--muted);">${state.combinedAll.length} unique events (after cutoff merge), ${state.filtered.length} match current filters.</p>
+    <button class="secondary" onclick="downloadCombinedCsv()">Download Combined CSV</button>
+    <button class="secondary" onclick="exportExcel()">Download Combined Excel</button>
+  `;
+}
+
+function downloadFile(filename, content, mimeType){
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadLSRCsv(){
+  if (!state.rawLSR || !state.rawLSR.features) return;
+  // header label -> array of keys to try (lowercase first; uppercase as fallback)
+  const map = [
+    ['VALID',    ['valid','VALID']],
+    ['TYPETEXT', ['typetext','TYPETEXT']],
+    ['TYPECODE', ['type','TYPE']],
+    ['MAG',      ['magf','magnitude','MAG']],
+    ['UNIT',     ['unit','UNIT']],
+    ['LAT',      ['lat','LAT']],
+    ['LON',      ['lon','LON']],
+    ['CITY',     ['city','CITY']],
+    ['COUNTY',   ['county','COUNTY']],
+    ['STATE',    ['state','STATE','st','ST']],
+    ['SOURCE',   ['source','SOURCE']],
+    ['REMARK',   ['remark','REMARK']],
+    ['QUALIFIER',['qualifier','QUALIFIER','qualify','QUALIFY']],
+    ['WFO',      ['wfo','WFO']],
+    ['PRODUCT_ID',['product_id','PRODUCT_ID']],
+  ];
+  const headers = map.map(m => m[0]);
+  const pickFrom = (p, keys) => {
+    for (const k of keys) if (p[k] !== undefined && p[k] !== null && p[k] !== '') return p[k];
+    return '';
+  };
+  const rows = state.rawLSR.features.map(f => {
+    const p = f.properties || {};
+    return map.map(m => {
+      const v = pickFrom(p, m[1]);
+      return String(v).replace(/"/g, '""');
+    });
+  });
+  const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+  downloadFile('lsr_raw.csv', csv, 'text/csv');
+}
+
+function downloadSEDFile(i){
+  const f = state.sedFiles[i];
+  if (!f) return;
+  downloadFile(f.name, f.original || '', 'text/csv');
+}
+
+function downloadCombinedCsv(){
+  if (!state.combinedAll.length) return;
+  const headers = ['Date_UTC','Source','Type','Category','Magnitude','Distance_mi','Severity','Damaging','Lat','Lon','City','County','State','Qualify','WFO','InClaimWindow','Remark'];
+  const rows = state.combinedAll.map(e => [
+    e.valid || '', e.source, e.type, e.category,
+    e.magnitude == null ? '' : e.magnitude,
+    e.distance.toFixed(2), e.severity, e.damaging ? 'Yes' : 'No',
+    e.lat, e.lon, e.city, e.county, e.state, e.qualify, e.wfo,
+    e.inClaimWindow == null ? '' : (e.inClaimWindow ? 'Yes' : 'No'),
+    (e.remark || '').replace(/[\r\n]+/g, ' ').slice(0, 500),
+  ]);
+  const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
+  downloadFile('combined_events.csv', csv, 'text/csv');
+}
+
+/* =========================================================================
+   EXCEL EXPORT
+   ========================================================================= */
+function exportExcel(){
+  const ctx = state.ctx;
+  if (!ctx || !state.combinedAll.length) { alert('No results to export.'); return; }
+  const wb = XLSX.utils.book_new();
+
+  const meta = [
+    ['Storm Claim Report'], [],
+    ['Project address',     ctx.matchedAddress],
+    ['Latitude',            ctx.lat],
+    ['Longitude',           ctx.lon],
+    ['Search radius (mi)',  ctx.radius],
+    ['Date range',          `${ctx.start} to ${ctx.end}`],
+    ['Claim date',          ctx.claimDate || '(not set)'],
+    ['Claim window (± d)',  ctx.claimWindow],
+    ['Generated',           new Date().toISOString()],
+    [],
+    ['Counties searched',   state.counties.map(c => `${c.name}${c.isPrimary ? ' [primary]' : ''}, ${c.state}`).join('; ')],
+    [],
+    ['Summary (filtered)'],
+    ['Total events',        state.filtered.length],
+    ['SED events',          state.filtered.filter(e => e.source === 'SED').length],
+    ['LSR events',          state.filtered.filter(e => e.source === 'LSR').length],
+    ['Hail',                state.filtered.filter(e => e.category === 'Hail').length],
+    ['Wind',                state.filtered.filter(e => e.category === 'Wind').length],
+    ['Tornado',             state.filtered.filter(e => e.category === 'Tornado').length],
+    ['Flood',               state.filtered.filter(e => e.category === 'Flood').length],
+    ['Likely damaging',     state.filtered.filter(e => e.damaging).length],
+    ['Max hail (in)',       state.filtered.filter(e => e.category === 'Hail' && e.magnitude != null).reduce((m,e) => Math.max(m, e.magnitude), 0) || '-'],
+    ['Max wind gust (mph)', state.filtered.filter(e => e.category === 'Wind' && e.magnitude != null).reduce((m,e) => Math.max(m, e.magnitude), 0) || '-'],
+    ['Closest event (mi)',  state.filtered.length ? state.filtered.reduce((m, e) => Math.min(m, e.distance), Infinity).toFixed(2) : '-'],
+  ];
+  if (ctx.claimDate) meta.push(['Events in claim window', state.filtered.filter(e => e.inClaimWindow).length]);
+  const ws1 = XLSX.utils.aoa_to_sheet(meta);
+  ws1['!cols'] = [{wch: 26}, {wch: 60}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Report');
+
+  // Combined sheet (filtered)
+  const headers = ['Date (UTC)','Source','Type','Category','Magnitude','Distance (mi)','Severity','Damaging?','Lat','Lon','City','County','State','Qualify','WFO','In Claim Window?','Remark'];
+  const combined = state.filtered.map(e => [
+    e.valid, e.source, e.type, e.category, e.magnitude, +e.distance.toFixed(2),
+    e.severity, e.damaging ? 'Yes' : 'No', e.lat, e.lon,
+    e.city, e.county, e.state, e.qualify, e.wfo,
+    e.inClaimWindow == null ? '' : (e.inClaimWindow ? 'Yes' : 'No'),
+    e.remark,
+  ]);
+  const ws2 = XLSX.utils.aoa_to_sheet([headers, ...combined]);
+  ws2['!cols'] = headers.map(h => ({ wch: Math.max(10, h.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, ws2, 'Combined');
+
+  // Original LSR sheet
+  if (state.rawLSR && state.rawLSR.features && state.rawLSR.features.length) {
+    const lsrHeaders = ['VALID','TYPETEXT','MAG','LAT','LON','CITY','COUNTY','STATE','SOURCE','REMARK','QUALIFY','WFO'];
+    const lsrRows = state.rawLSR.features.map(f => lsrHeaders.map(h => f.properties?.[h] ?? ''));
+    const ws3 = XLSX.utils.aoa_to_sheet([lsrHeaders, ...lsrRows]);
+    XLSX.utils.book_append_sheet(wb, ws3, 'LSR (raw)');
+  }
+
+  // SED rows sheet (all uploaded, normalized)
+  const sedAll = state.sedFiles.flatMap(f => f.rows);
+  if (sedAll.length) {
+    const sedHeaders = ['Date (UTC)','Type','Magnitude','Mag Type','TOR Scale','Lat','Lon','City','County','State','Source','Remark'];
+    const sedRows = sedAll.map(e => [
+      e.valid, e.type, e.magnitude, e.magType || '', e.torScale || '',
+      e.lat, e.lon, e.city, e.county, e.state, e.sourceDetail || '', e.remark,
+    ]);
+    const ws4 = XLSX.utils.aoa_to_sheet([sedHeaders, ...sedRows]);
+    XLSX.utils.book_append_sheet(wb, ws4, 'SED (uploaded)');
+  }
+
+  const filename = 'storm-report_' + (ctx.matchedAddress || 'address').replace(/[^A-Za-z0-9]/g,'_').slice(0, 40)
+                  + '_' + ctx.start + '_to_' + ctx.end + '.xlsx';
+  XLSX.writeFile(wb, filename);
+}
+
+/* =========================================================================
+   COUNTY UI
+   ========================================================================= */
+function renderCounties(){
+  const card = document.getElementById('county-card');
+  const div = document.getElementById('county-info');
+  if (!state.counties || !state.counties.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  div.innerHTML = state.counties.map(c => `
+    <span class="county-tag ${c.isPrimary ? 'primary-county' : ''}">${escapeHtml(c.name)} County, ${escapeHtml(c.state)}</span>
+  `).join(' ');
+}
+
+/* =========================================================================
+   SED DROP/UPLOAD
+   ========================================================================= */
+const sedDrop = document.getElementById('sed-drop');
+const sedInput = document.getElementById('sed-files');
+sedDrop.addEventListener('click', () => sedInput.click());
+sedDrop.addEventListener('dragover', e => { e.preventDefault(); sedDrop.classList.add('dragover'); });
+sedDrop.addEventListener('dragleave', () => sedDrop.classList.remove('dragover'));
+sedDrop.addEventListener('drop', e => {
+  e.preventDefault(); sedDrop.classList.remove('dragover');
+  handleSEDFiles(e.dataTransfer.files);
+});
+sedInput.addEventListener('change', e => handleSEDFiles(e.target.files));
+
+async function handleSEDFiles(files){
+  for (const file of Array.from(files || [])) {
+    try {
+      const text = await file.text();
+      const rows = parseSEDCsv(text);
+      state.sedFiles.push({ name: file.name, rows, original: text });
+      console.log(`SED ${file.name}: ${rows.length} rows`);
+    } catch (err) {
+      alert(`Failed to parse ${file.name}: ${err.message}`);
+    }
+  }
+  renderSedList();
+  if (state.ctx) {
+    rebuildCombined();
+    renderAll();
+  }
+}
+function renderSedList(){
+  const div = document.getElementById('sed-files-list');
+  if (!state.sedFiles.length) { div.innerHTML = ''; return; }
+  div.innerHTML = state.sedFiles.map((f, i) =>
+    `<span class="file-tag">${escapeHtml(f.name)} <small>(${f.rows.length})</small> <span class="x" onclick="removeSEDFile(${i})">×</span></span>`
+  ).join('');
+}
+function removeSEDFile(i){
+  state.sedFiles.splice(i, 1);
+  renderSedList();
+  if (state.ctx) { rebuildCombined(); renderAll(); }
+}
+
+/* =========================================================================
+   localStorage HISTORY
+   ========================================================================= */
+const HISTORY_KEY = 'stormClaimToolHistory_v2';
+function getHistory(){ try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
+function saveHistoryArr(h){ localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 50))); }
+function saveToHistory(){
+  if (!state.ctx) return;
+  const h = getHistory();
+  h.unshift({
+    address: state.ctx.matchedAddress,
+    lat: state.ctx.lat, lon: state.ctx.lon,
+    radius: state.ctx.radius,
+    start: state.ctx.start, end: state.ctx.end,
+    claimDate: state.ctx.claimDate, claimWindow: state.ctx.claimWindow,
+    eventCount: state.combinedAll.length,
+    damagingCount: state.combinedAll.filter(e => e.damaging).length,
+    timestamp: new Date().toISOString(),
+  });
+  saveHistoryArr(h);
+  renderHistory();
+  setStatus('Saved to history.', 'success');
+}
+function renderHistory(){
+  const list = document.getElementById('history-list');
+  const h = getHistory();
+  if (!h.length) { list.innerHTML = '<div class="empty" style="padding:18px;"><div style="font-size:11px;">No saved searches yet.</div></div>'; return; }
+  list.innerHTML = h.map((item, i) => `
+    <div class="history-item" onclick="rerunHistory(${i})">
+      <a class="h-del" href="#" onclick="event.stopPropagation();deleteHistory(${i});return false;">×</a>
+      <div class="h-addr">${escapeHtml(item.address)}</div>
+      <div class="h-meta">
+        ${item.start} → ${item.end} · ${item.radius} mi · ${item.eventCount} events · ${item.damagingCount} damaging<br>
+        <span style="opacity:.6;">${new Date(item.timestamp).toLocaleString()}</span>
+      </div>
+    </div>
+  `).join('');
+}
+function deleteHistory(i){ const h = getHistory(); h.splice(i,1); saveHistoryArr(h); renderHistory(); }
+function clearHistory(){ if (!confirm('Clear all saved searches?')) return; localStorage.removeItem(HISTORY_KEY); renderHistory(); }
+function rerunHistory(i){
+  const h = getHistory(); const it = h[i]; if (!it) return;
+  document.getElementById('address').value = it.address;
+  document.getElementById('start-date').value = it.start;
+  document.getElementById('end-date').value = it.end;
+  document.getElementById('radius').value = it.radius;
+  if (it.claimDate) document.getElementById('claim-date').value = it.claimDate;
+  document.getElementById('claim-window').value = it.claimWindow;
+  document.getElementById('search-form').requestSubmit();
+}
+
+/* =========================================================================
+   FILTERS UI
+   ========================================================================= */
+document.querySelectorAll('#type-filter input[type=checkbox]').forEach(cb =>
+  cb.addEventListener('change', applyFilters));
+
+function setFilters(on){
+  document.querySelectorAll('#type-filter input[type=checkbox]').forEach(cb => cb.checked = on);
+  applyFilters();
+}
+
+/* =========================================================================
+   TABS UI
+   ========================================================================= */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'map' && state.map) {
+      setTimeout(() => {
+        state.map.invalidateSize();
+        const ls = [];
+        if (state.layers.rings)   ls.push(...state.layers.rings.getLayers());
+        if (state.layers.markers) ls.push(...state.layers.markers.getLayers());
+        if (ls.length) state.map.fitBounds(L.featureGroup(ls).getBounds().pad(0.05), { maxZoom: 12 });
+      }, 60);
+    }
+  });
+});
+
+/* =========================================================================
+   MAIN SEARCH
+   ========================================================================= */
+async function runSearch(e){
+  e?.preventDefault();
+  const address = document.getElementById('address').value.trim();
+  const start = document.getElementById('start-date').value;
+  const end   = document.getElementById('end-date').value;
+  const radius = parseFloat(document.getElementById('radius').value);
+  const claimDate = document.getElementById('claim-date').value || null;
+  const claimWindow = parseInt(document.getElementById('claim-window').value || '7', 10);
+
+  if (!address || !start || !end || !radius) {
+    setStatus('Please fill in address, dates, and radius.', 'error');
+    return;
+  }
+  if (new Date(start) > new Date(end)) {
+    setStatus('Start date must be on or before end date.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('search-btn');
+  btn.disabled = true; btn.textContent = 'Searching…';
+
+  try {
+    setStatus('Geocoding address…', 'info');
+    const geo = await geocode(address);
+
+    state.ctx = {
+      matchedAddress: geo.matched,
+      lat: geo.lat, lon: geo.lon,
+      radius, start, end, claimDate, claimWindow,
+    };
+
+    setStatus(`Found: ${geo.matched}. Identifying counties…`, 'info');
+    state.counties = await findCounties(geo.lat, geo.lon, radius);
+    renderCounties();
+
+    if (SED_BASE_URL) {
+      const stateAbbrs = [...new Set(state.counties.map(c => STATE_TO_ABBR[(c.state || '').toUpperCase()]).filter(Boolean))];
+      if (stateAbbrs.length) {
+        const startYr = new Date(start + 'T00:00Z').getUTCFullYear();
+        const endYr   = new Date(end   + 'T00:00Z').getUTCFullYear();
+        setStatus(`Fetching SED for ${stateAbbrs.join(', ')} (${startYr}–${endYr})…`, 'info');
+        await autoFetchSED(stateAbbrs, startYr, endYr);
+      }
+    }
+
+    setStatus(`Pulling LSR data from IEM…`, 'info');
+    const { features } = await fetchLSRs(geo.lat, geo.lon, radius, start, end);
+    state.rawLSR = { features, fetchedAt: new Date().toISOString() };
+
+    rebuildCombined();
+    setStatus(`Done. ${state.combinedAll.length} events in radius (LSR ${state.combinedAll.filter(e => e.source === 'LSR').length} · SED ${state.combinedAll.filter(e => e.source === 'SED').length}).`, 'success');
+    renderAll();
+
+    // Print header
+    document.getElementById('ph-addr').textContent = `Storm Claim Report — ${geo.matched}`;
+    document.getElementById('ph-meta').textContent =
+      [`Radius ${radius} mi`, `${start} → ${end}`,
+        claimDate ? `Claim ${claimDate} (± ${claimWindow}d)` : ''].filter(Boolean).join(' • ');
+  } catch (err) {
+    console.error(err);
+    setStatus('Error: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Search Storm Reports';
+  }
+}
+
+function rebuildCombined(){
+  const lsrEvents = (state.rawLSR?.features || []).map(lsrFeatureToEvent).filter(Boolean);
+  const sedEvents = state.sedFiles.flatMap(f => f.rows);
+  const startDt = new Date(state.ctx.start + 'T00:00Z');
+  const endDt   = new Date(state.ctx.end   + 'T23:59Z');
+  const sedInRange = sedEvents.filter(e => e.date >= startDt && e.date <= endDt);
+  state.combinedAll = mergeWithCutoff(lsrEvents, sedInRange, state.ctx);
+  applyFilters();
+}
+
+function renderAll(){
+  renderDashboard();
+  renderMap();
+  renderTable();
+  renderRaw();
+}
+
+document.getElementById('search-form').addEventListener('submit', runSearch);
+
+function loadExample(){
+  document.getElementById('address').value = 'Hillsboro, TX 76645';
+  document.getElementById('start-date').value = '2018-04-06';
+  document.getElementById('end-date').value = '2018-04-20';
+  document.getElementById('radius').value = '25';
+  document.getElementById('claim-date').value = '2018-04-13';
+  document.getElementById('claim-window').value = '3';
+  document.getElementById('search-form').requestSubmit();
+}
+
+// init
+renderHistory();
+
+// Warn if running from file:// — APIs will be blocked by the browser.
+if (location.protocol === 'file:') {
+  const banner = document.createElement('div');
+  banner.style.cssText = 'background:#fff3cd;border-bottom:2px solid #f39c12;color:#7d4900;padding:10px 18px;font-size:13px;text-align:center;';
+  banner.innerHTML =
+    '<b>⚠ Running from local file (file://).</b> ' +
+    'Your browser will block calls to Census &amp; IEM APIs for security. ' +
+    'Close this and run <b>serve.bat</b> (in the same folder) instead, then visit ' +
+    '<code>http://localhost:8000/storm-claim-tool.html</code>.';
+  document.body.insertBefore(banner, document.body.firstChild);
+}
+
+
+/* =========================================================================
+   ADDRESS AUTOCOMPLETE (Photon — OSM, CORS-enabled, free)
+   ========================================================================= */
+let _autoTimer = null;
+let _autoHighlightedIdx = -1;
+const addrInput = document.getElementById('address');
+const suggBox = document.getElementById('address-suggestions');
+addrInput.addEventListener('input', () => {
+  clearTimeout(_autoTimer);
+  const q = addrInput.value.trim();
+  if (q.length < 4) { suggBox.style.display = 'none'; return; }
+  _autoTimer = setTimeout(() => fetchSuggestions(q), 300);
+});
+addrInput.addEventListener('keydown', e => {
+  const items = suggBox.querySelectorAll('.item');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') {
+    _autoHighlightedIdx = Math.min(items.length - 1, _autoHighlightedIdx + 1);
+    items.forEach((it, i) => it.classList.toggle('active', i === _autoHighlightedIdx));
+    e.preventDefault();
+  } else if (e.key === 'ArrowUp') {
+    _autoHighlightedIdx = Math.max(0, _autoHighlightedIdx - 1);
+    items.forEach((it, i) => it.classList.toggle('active', i === _autoHighlightedIdx));
+    e.preventDefault();
+  } else if (e.key === 'Enter' && _autoHighlightedIdx >= 0) {
+    items[_autoHighlightedIdx].click();
+    e.preventDefault();
+  } else if (e.key === 'Escape') {
+    suggBox.style.display = 'none';
+  }
+});
+document.addEventListener('click', e => {
+  if (!addrInput.contains(e.target) && !suggBox.contains(e.target)) suggBox.style.display = 'none';
+});
+async function fetchSuggestions(q){
+  try {
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&osm_tag=:!railway`;
+    const r = await fetch(url);
+    if (!r.ok) return;
+    const data = await r.json();
+    const features = (data.features || []).filter(f => {
+      const c = (f.properties && f.properties.countrycode) || '';
+      return c === 'US' || c === '';
+    });
+    if (!features.length) { suggBox.style.display = 'none'; return; }
+    suggBox.innerHTML = features.map((f, i) => {
+      const p = f.properties || {};
+      const main = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name || '';
+      const sub  = [p.city, p.county, p.state, p.postcode].filter(Boolean).join(', ');
+      return `<div class="item" data-idx="${i}">
+        <div>${escapeHtml(main || sub)}</div>
+        ${main && sub ? `<small>${escapeHtml(sub)}</small>` : ''}
+      </div>`;
+    }).join('');
+    suggBox.style.display = 'block';
+    _autoHighlightedIdx = -1;
+    suggBox.querySelectorAll('.item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = +item.dataset.idx;
+        const f = features[idx];
+        const p = f.properties || {};
+        const text = [
+          [p.housenumber, p.street].filter(Boolean).join(' '),
+          p.city, p.state, p.postcode,
+        ].filter(Boolean).join(', ') || p.name;
+        addrInput.value = text;
+        suggBox.style.display = 'none';
+      });
+    });
+  } catch (e) {
+    // Silent fail — autocomplete is a nice-to-have.
+  }
+}
+
+/* =========================================================================
+   IMAGE EXPORT (html2canvas)
+   ========================================================================= */
+async function saveAsImage(panelId, baseFilename){
+  const el = document.getElementById(panelId);
+  if (!el) return;
+  // For map: ensure tiles render at full size before capture
+  if (panelId === 'tab-map' && state.map) state.map.invalidateSize();
+
+  // Temporarily remove the table-wrap max-height so the whole table is captured.
+  const wraps = el.querySelectorAll('.table-wrap');
+  const oldMax = [];
+  wraps.forEach(w => { oldMax.push(w.style.maxHeight); w.style.maxHeight = 'none'; w.style.overflow = 'visible'; });
+
+  try {
+    const canvas = await html2canvas(el, {
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      scale: window.devicePixelRatio > 1 ? 2 : 1.5,
+      logging: false,
+    });
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    a.href = url;
+    a.download = `${baseFilename}_${stamp}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Could not capture image: ' + e.message);
+    console.error(e);
+  } finally {
+    wraps.forEach((w, i) => { w.style.maxHeight = oldMax[i] || ''; w.style.overflow = ''; });
+  }
+}
+
+/* =========================================================================
+   LAT/LON FALLBACK — wire the manual coordinate path into runSearch.
+   We override geocode() if the address field is empty and lat/lon are set.
+   ========================================================================= */
+const _origGeocode = geocode;
+geocode = async function(address){
+  if (!address || !address.trim()) {
+    const lat = parseFloat(document.getElementById('manual-lat').value);
+    const lon = parseFloat(document.getElementById('manual-lon').value);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      return { lat, lon, matched: `Manual coordinate: ${lat.toFixed(4)}, ${lon.toFixed(4)}` };
+    }
+    throw new Error('Enter an address or open "No street address?" and provide lat/lon.');
+  }
+  return _origGeocode(address);
+};
+
+// Allow form submit when address is empty but lat/lon are filled
+document.getElementById('search-form').addEventListener('submit', () => {
+  const addr = document.getElementById('address');
+  const lat = document.getElementById('manual-lat').value;
+  if (!addr.value && lat) addr.removeAttribute('required');
+  else addr.setAttribute('required', '');
+}, true);
+
+/* =========================================================================
+   ADSENSE ACTIVATION — only push() once a real publisher ID is in place.
+   ========================================================================= */
+(function maybeActivateAdsense(){
+  const slots = document.querySelectorAll('.adsbygoogle');
+  let hasReal = false;
+  slots.forEach(slot => {
+    const cli = slot.getAttribute('data-ad-client') || '';
+    if (cli && !cli.includes('YOUR_ADSENSE_PUBLISHER_ID') && cli.startsWith('ca-pub-')) {
+      hasReal = true;
+      slot.parentElement.classList.add('active');
+      try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+    }
+  });
+  if (!hasReal) {
+    // Hide all ad slot wrappers when not configured to avoid empty boxes.
+    document.querySelectorAll('.ad-slot').forEach(el => el.style.display = 'none');
+  }
+})();
+
+</script>
+</body>
+</html>
