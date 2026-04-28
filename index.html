@@ -274,11 +274,29 @@
         </div>
       </div>
 
-      <!-- ===== COUNTY INFO ===== -->
-      <div class="card" id="county-card" style="display:none;">
-        <h2>Counties for SED download</h2>
-        <div id="county-info" class="counties"></div>
-        <div class="hint" style="margin-top:8px;">Pull SED for these counties to capture events near county lines. Tag indicates which county the property is in.</div>
+      <!-- ===== YEAR FILTER (populated when search runs) ===== -->
+      <div class="card" id="year-filter-card" style="display:none;">
+        <h2>Years</h2>
+        <div class="filter-grid" id="year-filter"></div>
+        <div style="margin-top:8px;display:flex;gap:6px;">
+          <button type="button" class="ghost" onclick="setYearFilters(true)">All</button>
+          <button type="button" class="ghost" onclick="setYearFilters(false)">None</button>
+        </div>
+      </div>
+
+      <!-- ===== TIMELINE SLIDER (populated when search runs) ===== -->
+      <div class="card" id="timeline-card" style="display:none;">
+        <h2>Date range</h2>
+        <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px;">
+          <b id="ts-min-date" style="color:var(--primary);">—</b>
+          <span style="margin:0 6px;">to</span>
+          <b id="ts-max-date" style="color:var(--primary);">—</b>
+        </div>
+        <div style="display:grid;grid-template-columns:38px 1fr;gap:6px;align-items:center;font-size:11px;color:var(--muted);">
+          <span>From</span><input type="range" id="ts-min" min="0" max="100" value="0" style="width:100%;">
+          <span>To</span><input type="range" id="ts-max" min="0" max="100" value="100" style="width:100%;">
+        </div>
+        <button type="button" class="ghost" onclick="resetTimelineSlider()" style="width:100%;margin-top:8px;">Reset to full range</button>
       </div>
 
       <!-- ===== HISTORY ===== -->
@@ -894,11 +912,11 @@ function buildEstimates(){
   const claimDate = state.ctx ? state.ctx.claimDate : null;
   const claimWindow = state.ctx ? state.ctx.claimWindow : 7;
   for (const r of results) r.causationScore = causationScore(r, claimDate, claimWindow);
-  // Default sort by causation score descending — "most likely cause" first.
-  results.sort((a, b) => (b.causationScore - a.causationScore) || a.date.localeCompare(b.date));
   return results;
 }
 
+let estSortField = 'causationScore';
+let estSortAsc = false;
 function renderEstimates(){
   const container = document.getElementById('estimates-content');
   if (!state.ctx) {
@@ -906,6 +924,13 @@ function renderEstimates(){
     return;
   }
   const rows = buildEstimates();
+  rows.sort((a, b) => {
+    let av = a[estSortField], bv = b[estSortField];
+    if (av == null) av = ''; if (bv == null) bv = '';
+    if (av < bv) return estSortAsc ? -1 : 1;
+    if (av > bv) return estSortAsc ? 1 : -1;
+    return (b.date || '').localeCompare(a.date || '');
+  });
   if (!rows.length) {
     container.innerHTML = '<div class="empty"><div>No qualifying days.</div><div class="hint" style="margin-top:6px;">An estimate is emitted for a day only if at least one hail or wind report (with magnitude) was within 5 mi of the property.</div></div>';
     return;
@@ -915,22 +940,22 @@ function renderEstimates(){
     : `<b>${Math.round(r.value)} mph</b>`;
   container.innerHTML = `
     <div class="table-wrap">
-      <table class="results">
+      <table class="results" id="estimates-table">
         <thead><tr>
-          <th>Date (UTC)</th>
-          <th>Type</th>
-          <th>Estimate</th>
-          <th>Reports</th>
-          <th>Closest</th>
-          <th>Radius</th>
-          <th title="Are reports distributed around the property (Yes = interpolation) or all on one side (No = extrapolation, less reliable)?">Surrounded?</th>
-          <th>Storm dir</th>
-          <th title="Distance from property to the inferred storm track">Path prox.</th>
-          <th title="R² of the linear (lat,lon)~time fit. Higher = more coherent storm track.">Track R²</th>
-          <th title="0–100 ranking of how likely this storm caused damage. Combines severity, confidence, spatial coverage, and proximity to claim date.">Score</th>
-          <th>Confidence</th>
-          <th title="Yes if another credible damaging event occurred within ±30 days — claim attribution may span events.">Compounding</th>
-          <th title="View NEXRAD/MRMS radar archive for this date in IEM Time Machine">Radar</th>
+          <th data-est-sort="date">Date (UTC)<span class="arrow">↕</span></th>
+          <th data-est-sort="type">Type<span class="arrow">↕</span></th>
+          <th data-est-sort="value">Estimate<span class="arrow">↕</span></th>
+          <th data-est-sort="n">Reports<span class="arrow">↕</span></th>
+          <th data-est-sort="closestDist">Closest<span class="arrow">↕</span></th>
+          <th data-est-sort="radiusUsed">Radius<span class="arrow">↕</span></th>
+          <th data-est-sort="maxGap" title="Are reports distributed around the property (Yes = interpolation) or all on one side (No = extrapolation, less reliable)?">Surrounded?<span class="arrow">↕</span></th>
+          <th data-est-sort="direction">Storm dir<span class="arrow">↕</span></th>
+          <th data-est-sort="pathProximity" title="Distance from property to the inferred storm track">Path prox.<span class="arrow">↕</span></th>
+          <th data-est-sort="pathR2" title="R² of the linear (lat,lon)~time fit. Higher = more coherent storm track.">Track R²<span class="arrow">↕</span></th>
+          <th data-est-sort="causationScore" title="0–100 ranking of how likely this storm caused damage.">Score<span class="arrow">↕</span></th>
+          <th data-est-sort="confidence">Confidence<span class="arrow">↕</span></th>
+          <th data-est-sort="compounding" title="Yes if another credible damaging event occurred within ±30 days.">Compounding<span class="arrow">↕</span></th>
+          <th>Radar</th>
         </tr></thead>
         <tbody>
           ${rows.map(r => `
@@ -955,6 +980,18 @@ function renderEstimates(){
       </table>
     </div>
   `;
+  bindEstimatesSorting();
+}
+
+function bindEstimatesSorting(){
+  document.querySelectorAll('#estimates-table th[data-est-sort]').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.onclick = () => {
+      const f = th.getAttribute('data-est-sort');
+      if (estSortField === f) estSortAsc = !estSortAsc; else { estSortField = f; estSortAsc = false; }
+      renderEstimates();
+    };
+  });
 }
 
 function bboxFromCenter(lat, lon, radiusMi){
@@ -1344,11 +1381,100 @@ function getActiveCategories(){
   document.querySelectorAll('#type-filter input[type=checkbox]:checked').forEach(cb => set.add(cb.value));
   return set;
 }
+function getActiveYears(){
+  const checks = document.querySelectorAll('#year-filter input[type=checkbox]');
+  if (!checks.length) return null;
+  const set = new Set();
+  document.querySelectorAll('#year-filter input[type=checkbox]:checked').forEach(cb => set.add(+cb.value));
+  return set;
+}
+function setYearFilters(on){
+  document.querySelectorAll('#year-filter input[type=checkbox]').forEach(cb => cb.checked = on);
+  applyFilters();
+}
 function applyFilters(){
   const cats = getActiveCategories();
-  state.filtered = state.combinedAll.filter(e => cats.has(e.category));
-  state.filtered.sort((a, b) => a.distance - b.distance);
+  const years = getActiveYears();
+  const tl = state.timelineFilter;
+  state.filtered = state.combinedAll.filter(e => {
+    if (!cats.has(e.category)) return false;
+    if (years && years.size && e.date && !years.has(e.date.getUTCFullYear())) return false;
+    if (tl && e.date) {
+      const ts = e.date.getTime();
+      if (ts < tl.startTs || ts > tl.endTs) return false;
+    }
+    return true;
+  });
+  // Apply current sort field for table view
+  state.filtered.sort((a, b) => {
+    let av = a[sortField], bv = b[sortField];
+    if (av == null) av = ''; if (bv == null) bv = '';
+    if (av < bv) return sortAsc ? -1 : 1;
+    if (av > bv) return sortAsc ? 1 : -1;
+    return 0;
+  });
   renderAll();
+}
+
+function populateYearFilter(){
+  const card = document.getElementById('year-filter-card');
+  const grid = document.getElementById('year-filter');
+  if (!state.ctx) { card.style.display = 'none'; return; }
+  const startYr = new Date(state.ctx.start + 'T00:00Z').getUTCFullYear();
+  const endYr = new Date(state.ctx.end + 'T00:00Z').getUTCFullYear();
+  if (endYr - startYr < 1) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  let html = '';
+  for (let y = startYr; y <= endYr; y++) {
+    html += `<label><input type="checkbox" value="${y}" checked>${y}</label>`;
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', applyFilters));
+}
+
+function populateTimelineSlider(){
+  const card = document.getElementById('timeline-card');
+  if (!state.ctx) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const startMs = new Date(state.ctx.start + 'T00:00Z').getTime();
+  const endMs = new Date(state.ctx.end + 'T23:59Z').getTime();
+  const totalDays = Math.max(1, Math.ceil((endMs - startMs) / 86400000));
+  const minInput = document.getElementById('ts-min');
+  const maxInput = document.getElementById('ts-max');
+  minInput.max = totalDays; maxInput.max = totalDays;
+  minInput.value = 0; maxInput.value = totalDays;
+  state.timelineFilter = { startTs: startMs, endTs: endMs };
+  updateTimelineLabels();
+  if (!minInput._bound) {
+    minInput.addEventListener('input', onTimelineChange);
+    maxInput.addEventListener('input', onTimelineChange);
+    minInput._bound = true;
+  }
+}
+function onTimelineChange(){
+  if (!state.ctx) return;
+  const minInput = document.getElementById('ts-min');
+  const maxInput = document.getElementById('ts-max');
+  let lo = parseInt(minInput.value, 10);
+  let hi = parseInt(maxInput.value, 10);
+  if (lo > hi) { [lo, hi] = [hi, lo]; minInput.value = lo; maxInput.value = hi; }
+  const startMs = new Date(state.ctx.start + 'T00:00Z').getTime();
+  state.timelineFilter = {
+    startTs: startMs + lo * 86400000,
+    endTs: startMs + hi * 86400000 + 86400000 - 1,
+  };
+  updateTimelineLabels();
+  applyFilters();
+}
+function updateTimelineLabels(){
+  if (!state.timelineFilter) return;
+  document.getElementById('ts-min-date').textContent = new Date(state.timelineFilter.startTs).toISOString().slice(0, 10);
+  document.getElementById('ts-max-date').textContent = new Date(state.timelineFilter.endTs).toISOString().slice(0, 10);
+}
+function resetTimelineSlider(){
+  if (!state.ctx) return;
+  populateTimelineSlider();
+  applyFilters();
 }
 
 /* =========================================================================
@@ -1402,7 +1528,6 @@ function renderDashboard(){
     </div>
 
     <div class="plotly-grid">
-      <div class="chart-box"><h3>Events around property — direction &amp; distance</h3><div id="plot-polar" class="plotly-chart"></div></div>
       <div class="chart-box"><h3>Hail causation timeline — candidate days for damage attribution</h3><div id="plot-causation-Hail" class="plotly-chart"></div></div>
       <div class="chart-box"><h3>Wind causation timeline — candidate days for damage attribution</h3><div id="plot-causation-Wind" class="plotly-chart"></div></div>
     </div>
@@ -1491,55 +1616,8 @@ function drawCharts(evts){
 
 function drawPlotlyCharts(evts){
   if (typeof Plotly === 'undefined') return;
-  const ctx = state.ctx;
 
-  // ----- Polar scatter: bearing from property vs distance, sized by mag, colored by category
-  const polarTraces = {};
-  for (const e of evts) {
-    if (e.distance == null) continue;
-    const cat = e.category;
-    if (!polarTraces[cat]) {
-      polarTraces[cat] = {
-        type: 'scatterpolar', mode: 'markers', name: cat,
-        r: [], theta: [], customdata: [],
-        marker: { color: CATEGORY_COLORS[cat] || '#888', size: [], line: { color: '#fff', width: 1 }, opacity: 0.85 },
-        hovertemplate: '<b>%{customdata[0]}</b><br>Date: %{customdata[1]}<br>Mag: %{customdata[2]}<br>%{r:.2f} mi · %{theta:.0f}°<extra></extra>',
-      };
-    }
-    const bearing = bearingDeg(ctx.lat, ctx.lon, e.lat, e.lon);
-    polarTraces[cat].r.push(e.distance);
-    polarTraces[cat].theta.push(bearing);
-    const m = e.magnitude;
-    polarTraces[cat].marker.size.push(m == null ? 6 : Math.min(20, 4 + Math.log(m + 1) * 4));
-    polarTraces[cat].customdata.push([
-      e.type,
-      e.valid ? String(e.valid).slice(0, 16).replace('T', ' ') : '',
-      m == null ? '—' : (cat === 'Wind' ? Math.round(m) + ' mph' : m.toFixed(2) + (cat === 'Hail' ? '"' : '')),
-    ]);
-  }
-  const polarData = Object.values(polarTraces);
-  polarData.push({
-    type: 'scatterpolar', mode: 'markers', name: 'Property',
-    r: [0], theta: [0], showlegend: true,
-    marker: { color: '#1f4e78', size: 14, symbol: 'star', line: { color: '#fff', width: 2 } },
-    hovertemplate: '<b>Property</b><br>%{text}<extra></extra>', text: [ctx.matchedAddress || ''],
-  });
-  Plotly.newPlot('plot-polar', polarData, {
-    margin: { t: 30, l: 30, r: 30, b: 30 },
-    showlegend: true,
-    legend: { orientation: 'h', y: -0.1 },
-    polar: {
-      angularaxis: {
-        direction: 'clockwise', rotation: 90,
-        tickmode: 'array',
-        tickvals: [0, 45, 90, 135, 180, 225, 270, 315],
-        ticktext: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
-      },
-      radialaxis: { title: 'Distance (mi)', angle: 90 },
-    },
-  }, { responsive: true, displayModeBar: false });
-
-  // ----- Causation timelines (Hail + Wind) -----
+  // Polar scatter removed — map covers spatial layout. Causation timelines below.
   drawCausationTimeline();
 }
 
@@ -1748,8 +1826,8 @@ function renderMap(){
 /* =========================================================================
    RENDERING — TABLE
    ========================================================================= */
-let sortField = 'distance';
-let sortAsc = true;
+let sortField = 'date';
+let sortAsc = false;
 function renderTable(){
   const ctx = state.ctx;
   const evts = state.filtered;
@@ -2161,6 +2239,8 @@ async function runSearch(e){
     setStatus(`Found: ${geo.matched}. Identifying counties…`, 'info');
     state.counties = await findCounties(geo.lat, geo.lon, radius);
     renderCounties();
+    populateYearFilter();
+    populateTimelineSlider();
 
     if (SED_BASE_URL) {
       const stateAbbrs = [...new Set(state.counties.map(c => stateLabelToAbbr(c.state)).filter(Boolean))];
