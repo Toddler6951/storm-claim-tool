@@ -1,4 +1,151 @@
 {
+  "1996": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:14:49.278448Z",
+    "filename": "StormEvents_details-ftp_v1.0_d1996_c20260323.csv.gz",
+    "row_total": 48534,
+    "states_count": 52
+  },
+  "1997": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:14:51.140435Z",
+    "filename": "StormEvents_details-ftp_v1.0_d1997_c20260323.csv.gz",
+    "row_total": 41991,
+    "states_count": 54
+  },
+  "1998": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:14:53.472513Z",
+    "filename": "StormEvents_details-ftp_v1.0_d1998_c20260323.csv.gz",
+    "row_total": 50972,
+    "states_count": 55
+  },
+  "1999": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:14:55.848257Z",
+    "filename": "StormEvents_details-ftp_v1.0_d1999_c20260323.csv.gz",
+    "row_total": 46383,
+    "states_count": 55
+  },
+  "2000": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:14:57.948423Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2000_c20260323.csv.gz",
+    "row_total": 52007,
+    "states_count": 55
+  },
+  "2001": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:14:59.959479Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2001_c20260323.csv.gz",
+    "row_total": 48764,
+    "states_count": 55
+  },
+  "2002": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:01.962620Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2002_c20260323.csv.gz",
+    "row_total": 49572,
+    "states_count": 55
+  },
+  "2003": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:04.005072Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2003_c20260323.csv.gz",
+    "row_total": 51230,
+    "states_count": 55
+  },
+  "2004": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:06.090740Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2004_c20260323.csv.gz",
+    "row_total": 50780,
+    "states_count": 55
+  },
+  "2005": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:08.336325Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2005_c20260323.csv.gz",
+    "row_total": 52573,
+    "states_count": 55
+  },
+  "2006": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:10.580318Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2006_c20260323.csv.gz",
+    "row_total": 54935,
+    "states_count": 55
+  },
+  "2007": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:13.230304Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2007_c20260323.csv.gz",
+    "row_total": 57694,
+    "states_count": 55
+  },
+  "2008": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:16.290805Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2008_c20260323.csv.gz",
+    "row_total": 69626,
+    "states_count": 55
+  },
+  "2009": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:19.090751Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2009_c20260323.csv.gz",
+    "row_total": 56128,
+    "states_count": 55
+  },
+  "2010": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:21.922385Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2010_c20260323.csv.gz",
+    "row_total": 61311,
+    "states_count": 55
+  },
+  "2011": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:25.615740Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2011_c20260323.csv.gz",
+    "row_total": 77111,
+    "states_count": 55
+  },
+  "2012": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:28.612368Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2012_c20260323.csv.gz",
+    "row_total": 62370,
+    "states_count": 55
+  },
+  "2013": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:31.648553Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2013_c20260323.csv.gz",
+    "row_total": 58334,
+    "states_count": 55
+  },
+  "2014": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:34.395419Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2014_c20260323.csv.gz",
+    "row_total": 57675,
+    "states_count": 55
+  },
+  "2015": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:37.104729Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2015_c20260323.csv.gz",
+    "row_total": 55733,
+    "states_count": 55
+  },
+  "2016": {
+    "creation": "20260323",
+    "fetched_at": "2026-04-28T19:15:39.893482Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2016_c20260323.csv.gz",
+    "row_total": 53522,
+    "states_count": 55
+  },
   "2017": {
     "creation": "20260323",
     "fetched_at": "2026-04-28T04:04:11.116939Z",
