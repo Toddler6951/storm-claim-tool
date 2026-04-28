@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Storm Event Lookup — Claim Research Tool</title>
 <!-- ===== AdSense (optional) =====
-     1) Replace YOUR_ADSENSE_PUBLISHER_ID with your AdSense publisher ID,
+     1) Replace ca-pub-7425790647094520 with your AdSense publisher ID,
         e.g. ca-pub-1234567890123456 (get it at https://adsense.google.com/).
      2) Replace each data-ad-slot=" SLOT_ID " with the slot ID from your
         AdSense dashboard for the matching ad unit.
@@ -13,15 +13,7 @@
         a host (GitHub Pages, Netlify, etc.) — file:// and localhost
         won't serve real ads.
      If you leave the placeholder ID, no ads load and no errors fire. -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=YOUR_ADSENSE_PUBLISHER_ID" crossorigin="anonymous" id="adsense-script" onerror="this.remove()"></script>
-<script>
-  // Strip the AdSense script if the publisher ID is still the placeholder.
-  (function(){
-    var s = document.getElementById("adsense-script");
-    if (s && s.src.indexOf("YOUR_ADSENSE_PUBLISHER_ID") !== -1) s.remove();
-  })();
-</script>
-
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7425790647094520" crossorigin="anonymous" id="adsense-script" onerror="this.remove()"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
@@ -292,7 +284,7 @@
 
       <!-- AdSense slot 1 (sidebar) — fill data-ad-client / data-ad-slot to enable. -->
       <div class="ad-slot" id="ad-slot-1">
-        <ins class="adsbygoogle" style="display:block" data-ad-client="YOUR_ADSENSE_PUBLISHER_ID" data-ad-slot="SLOT_ID" data-ad-format="auto" data-full-width-responsive="true"></ins>
+        <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7425790647094520" data-ad-slot="SLOT_ID" data-ad-format="auto" data-full-width-responsive="true"></ins>
       </div>
 
       <!-- ===== HELP ===== -->
@@ -2032,7 +2024,10 @@ document.getElementById('search-form').addEventListener('submit', () => {
   let hasReal = false;
   slots.forEach(slot => {
     const cli = slot.getAttribute('data-ad-client') || '';
-    if (cli && !cli.includes('YOUR_ADSENSE_PUBLISHER_ID') && cli.startsWith('ca-pub-')) {
+    const slt = slot.getAttribute('data-ad-slot') || '';
+    const pubReal  = /^ca-pub-\d+$/.test(cli);
+    const slotReal = slt && slt !== 'SLOT_ID' && /^\d+$/.test(slt);
+    if (pubReal && slotReal) {
       hasReal = true;
       slot.parentElement.classList.add('active');
       try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
