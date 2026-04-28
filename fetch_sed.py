@@ -12,7 +12,7 @@ Workflow:
      subsequent runs skip files NCEI hasn't republished.
 
 Usage:
-  python fetch_sed.py                 # last 10 years
+  python fetch_sed.py                 # 1996 to current (~30 years)
   python fetch_sed.py --years 2018 2019 2020
   python fetch_sed.py --years-from 2015        # from 2015 to current year
   python fetch_sed.py --states TX OK LA        # limit output to specific states
@@ -140,7 +140,7 @@ def split_by_state(year, csv_text, only_states=None):
 def main():
     p = argparse.ArgumentParser(description="Download and split NOAA SED data per state-year.")
     p.add_argument("--years", type=int, nargs="+",
-                   help="Specific years to download. Default: last 10 years.")
+                   help="Specific years to download. Default: 1996 to current.")
     p.add_argument("--years-from", type=int, default=None,
                    help="Download from this year through current year.")
     p.add_argument("--states", nargs="+",
@@ -162,10 +162,11 @@ def main():
     elif args.years_from is not None:
         years_wanted = list(range(args.years_from, current_year + 1))
     else:
-        # Default: last 10 years. Use --years-from 1950 (or any earlier
-        # year) once initial testing is settled and you want the full
-        # historical archive — note the repo size implications first.
-        years_wanted = list(range(current_year - 9, current_year + 1))
+        # Default: 1996 to current. NCEI's modern Storm Events Database
+        # launched in 1996 — that's when event format became consistent
+        # and lat/lon was reliably recorded. Pre-1996 records are mostly
+        # county-only and not useful to a radius-based tool.
+        years_wanted = list(range(1996, current_year + 1))
 
     print(f"  Targeting years: {years_wanted[0]}–{years_wanted[-1]} ({len(years_wanted)} years)")
     if only_states:

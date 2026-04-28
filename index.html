@@ -128,6 +128,14 @@
   .conf-High{background:#27ae60;color:#fff;}
   .conf-Medium{background:#e67e22;color:#fff;}
   .conf-Low{background:#bdc3c7;color:#333;}
+  .conf-Inconclusive{background:#7f8c8d;color:#fff;font-style:italic;}
+  .score-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:700;font-size:11px;color:#fff;min-width:30px;text-align:center;}
+  .compound-pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600;background:#fff5e6;color:#b35900;border:1px solid #ffd99c;}
+  .radar-link{color:var(--primary);text-decoration:none;font-size:14px;padding:2px 6px;border-radius:4px;}
+  .radar-link:hover{background:#eef3f8;}
+  .capturing .actions{display:none !important;}
+  .plotly-chart{width:100%;min-height:340px;}
+  .plotly-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px;}
   .source-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;}
   .src-SED{background:#d6eaff;color:#1f4e78;}
   .src-LSR{background:#fde6c4;color:#8a5500;}
@@ -202,7 +210,7 @@
             <label for="address">Project address</label>
             <input type="text" id="address" placeholder="Start typing… 123 Main St, Hillsboro, TX 76645" autocomplete="off">
             <div id="address-suggestions" class="suggestions" style="display:none;"></div>
-            <div class="hint">Geocoded via Census Bureau. Suggestions from OpenStreetMap.</div>
+            <div class="hint">Powered by Google Maps Platform.</div>
           </div>
           <details class="form-row" style="margin-top:-4px;">
             <summary style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">No street address? Enter coordinates</summary>
@@ -431,7 +439,7 @@
 <li><b>Storm-track inference</b>: with ≥3 reports the tool fits a linear regression of (lat, lon) ~ time and reports the inferred storm motion direction. The perpendicular distance from the property to that track ("path proximity") is reported. If the property is on or very close to the inferred track, that strongly suggests the storm passed over the location.</li>
 <li><b>Confidence</b> (Low / Medium / High) blends closest-report distance, report count, path proximity, and whether the adaptive radius had to expand.</li>
 </ol>
-<p>Limitations: storm direction is *inferred* from the report sequence — actual wind-direction observations (HRRR/RAP forecasts, METAR) are not yet pulled. UTC day grouping can split a single storm across two rows when it crosses midnight UTC.</p>
+<p><b>v2 signals exposed in the table:</b></p><ul><li><b>Surrounded?</b> — looks at the report bearings around the property and finds the largest "shadow zone". Max-gap &lt; 180° = property interpolated inside the cluster (more reliable). Max-gap &gt; 180° = property on the edge — the storm probably passed by, not over. Strong negative signal for confidence.</li><li><b>Track R²</b> — how well a straight line fits the (lat, lon) ~ time path of reports. R² &lt; 0.5 means the reports don't form a coherent storm track and inferred direction/path-proximity are not used in scoring.</li><li><b>Inconclusive</b> — explicit confidence tier when too many signals are weak or conflicting; algorithm refuses to commit to "Low" when the spatial pattern is genuinely sparse.</li></ul><p><b>Causation score (0–100)</b> ranks each candidate event by likelihood it caused / contributed to damage. Combines severity (normalized within type), confidence tier, whether reports surrounded the property, and proximity to the claim date when set. Events <em>after</em> the claim date are penalized. The Estimates table sorts by score descending by default, so the strongest candidate is the top row.</p><p><b>Compounding</b> flags days where another credible damaging event (Medium+ confidence, hail ≥1″ or wind ≥50 mph) occurred within ±30 days. Useful when claim attribution may span more than one event (e.g., back-to-back storms).</p><p><b>📡 Radar link</b> opens the <a href="https://mesonet.agron.iastate.edu/timemachine/" target="_blank" rel="noopener">Iowa Environmental Mesonet Time Machine</a> archive at the event date — switch to the MRMS MESH product to visually confirm what the radar saw at that location and time. This is the manual ground-truth check; full programmatic MESH integration is a future enhancement.</p><p>Limitations: storm direction is inferred from the report sequence — actual wind/radar (HRRR/RAP forecasts, NEXRAD MESH) are not yet pulled programmatically. UTC day grouping can split a single storm across two rows when it crosses midnight UTC. For per-point hail ground truth, the gold standard is NEXRAD MRMS MESH; until automated, use the radar link per row to verify manually.</p>
 
 <h3>Output formats</h3>
           <ul>
@@ -458,7 +466,7 @@
 </main>
 
 <footer>
-  Data: NWS LSR via Iowa Environmental Mesonet · NCEI Storm Events Database (user-uploaded) · Geocoding: U.S. Census Bureau · For research; verify findings against official NCEI Storm Events Database for legal/insurance use.
+  Data: NWS LSR via Iowa Environmental Mesonet · NCEI Storm Events Database (user-uploaded) · Geocoding: Google Maps Platform · For research; verify findings against official NCEI Storm Events Database for legal/insurance use.
 </footer>
 
 <!-- Libraries -->
@@ -467,10 +475,33 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script>
+  (function(){
+    const KEY = "AIzaSyCiHjHTb1kMCxzMQyClb_nG9v9SXnNBn5s";
+    const s = document.createElement("script");
+    s.src = "https://maps.googleapis.com/maps/api/js?key=" + KEY + "&libraries=places&loading=async&callback=initGoogle";
+    s.async = true; s.defer = true;
+    document.head.appendChild(s);
+  })();
+  window.initGoogle = function(){
+    window._googleAutocomplete = new google.maps.places.AutocompleteService();
+    window._googlePlaces = new google.maps.places.PlacesService(document.createElement("div"));
+    window._googleGeocoder = new google.maps.Geocoder();
+    window._googleReady = true;
+  };
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <script>
 "use strict";
+
+/* =========================================================================
+   GOOGLE MAPS PLATFORM API KEY
+   Restrict via Cloud Console → Credentials → HTTP referrers and API
+   restrictions before going live. Set a billing budget cap as a backstop.
+   ========================================================================= */
+const GOOGLE_API_KEY = "AIzaSyCiHjHTb1kMCxzMQyClb_nG9v9SXnNBn5s";
 
 /* =========================================================================
    SED AUTO-FETCH CONFIG
@@ -648,11 +679,18 @@ function degTo16(deg){
        rows. SED times are stored in local time but written as UTC by the
        parser; this is a known minor offset.
    ========================================================================= */
+function bearingDeg(lat1, lon1, lat2, lon2){
+  const toRad=d=>d*Math.PI/180, toDeg=r=>r*180/Math.PI;
+  const phi1=toRad(lat1), phi2=toRad(lat2), dlam=toRad(lon2-lon1);
+  const y=Math.sin(dlam)*Math.cos(phi2);
+  const x=Math.cos(phi1)*Math.sin(phi2)-Math.sin(phi1)*Math.cos(phi2)*Math.cos(dlam);
+  return (toDeg(Math.atan2(y,x))+360)%360;
+}
+
 function estimateAtProperty(reports, ctx){
   const valid = reports.filter(r => r.magnitude != null && r.distance != null);
   if (!valid.length) return null;
 
-  // Adaptive radius
   const ladder = [5, 10, 15, 20];
   let radiusUsed = ladder[0];
   let local = valid.filter(r => r.distance <= radiusUsed);
@@ -662,7 +700,6 @@ function estimateAtProperty(reports, ctx){
   }
   if (!local.length) return null;
 
-  // IDW, p=2
   const p = 2, epsilon = 0.5;
   let wSum = 0, wValSum = 0;
   for (const r of local) {
@@ -673,8 +710,24 @@ function estimateAtProperty(reports, ctx){
   const value = wValSum / wSum;
   const closestDist = Math.min(...local.map(r => r.distance));
 
-  // Storm-track inference
-  let direction = null, pathProximity = null;
+  // Angular coverage: max gap between consecutive bearings around the property.
+  // Small (< 180°) = surrounded → IDW interpolates → reliable.
+  // Large (> 180°) = property on edge → IDW extrapolates → unreliable.
+  let maxGap = 360;
+  if (local.length >= 2) {
+    const bearings = local.map(r => bearingDeg(ctx.lat, ctx.lon, r.lat, r.lon)).sort((a, b) => a - b);
+    maxGap = 0;
+    for (let i = 0; i < bearings.length; i++) {
+      const j = (i + 1) % bearings.length;
+      const gap = (j === 0) ? (bearings[0] + 360 - bearings[i]) : (bearings[j] - bearings[i]);
+      if (gap > maxGap) maxGap = gap;
+    }
+  }
+  const surrounded = maxGap < 180;
+
+  // Storm-track regression with R². R² gates whether direction/path-proximity
+  // are trusted: when reports don't follow a coherent line, R² is low.
+  let direction = null, pathProximity = null, pathR2 = null;
   if (local.length >= 3) {
     const sorted = [...local].sort((a, b) => a.date - b.date);
     const t0 = sorted[0].date.getTime();
@@ -684,42 +737,137 @@ function estimateAtProperty(reports, ctx){
     const tBar = ts.reduce((s, v) => s + v, 0) / ts.length;
     const latBar = lats.reduce((s, v) => s + v, 0) / lats.length;
     const lonBar = lons.reduce((s, v) => s + v, 0) / lons.length;
-    let nLat = 0, nLon = 0, dT = 0;
+    let nLat = 0, nLon = 0, dT = 0, ssLat = 0, ssLon = 0;
     for (let i = 0; i < ts.length; i++) {
       nLat += (ts[i] - tBar) * (lats[i] - latBar);
       nLon += (ts[i] - tBar) * (lons[i] - lonBar);
       dT += (ts[i] - tBar) ** 2;
+      ssLat += (lats[i] - latBar) ** 2;
+      ssLon += (lons[i] - lonBar) ** 2;
     }
     if (dT > 0) {
-      const dLatPerMin = nLat / dT;
-      const dLonPerMin = nLon / dT;
-      const miPerLat = 69.0;
-      const miPerLon = 69.0 * Math.cos(latBar * Math.PI / 180);
-      const vy = dLatPerMin * miPerLat * 60;
-      const vx = dLonPerMin * miPerLon * 60;
-      const speed = Math.sqrt(vx * vx + vy * vy);
-      if (speed > 0.5) {
-        const deg = (Math.atan2(vx, vy) * 180 / Math.PI + 360) % 360;
-        direction = degTo16(deg);
-        const dx = (ctx.lon - lonBar) * miPerLon;
-        const dy = (ctx.lat - latBar) * miPerLat;
-        pathProximity = Math.abs(dx * vy - dy * vx) / speed;
+      const r2Lat = (ssLat > 0) ? (nLat * nLat) / (dT * ssLat) : 0;
+      const r2Lon = (ssLon > 0) ? (nLon * nLon) / (dT * ssLon) : 0;
+      pathR2 = Math.max(r2Lat, r2Lon);
+      if (pathR2 >= 0.5) {
+        const dLatPerMin = nLat / dT;
+        const dLonPerMin = nLon / dT;
+        const miPerLat = 69.0;
+        const miPerLon = 69.0 * Math.cos(latBar * Math.PI / 180);
+        const vy = dLatPerMin * miPerLat * 60;
+        const vx = dLonPerMin * miPerLon * 60;
+        const speed = Math.sqrt(vx * vx + vy * vy);
+        if (speed > 0.5) {
+          const deg = (Math.atan2(vx, vy) * 180 / Math.PI + 360) % 360;
+          direction = degTo16(deg);
+          const dx = (ctx.lon - lonBar) * miPerLon;
+          const dy = (ctx.lat - latBar) * miPerLat;
+          pathProximity = Math.abs(dx * vy - dy * vx) / speed;
+        }
       }
     }
   }
 
-  // Confidence
+  // Conservative confidence ladder: High requires close report AND surrounded.
   let score = 0;
-  if (closestDist <= 2) score += 2; else if (closestDist <= 5) score += 1;
-  if (local.length >= 5) score += 2; else if (local.length >= 3) score += 1;
+  if (closestDist <= 1) score += 3;
+  else if (closestDist <= 2) score += 2;
+  else if (closestDist <= 5) score += 1;
+  if (local.length >= 5) score += 1;
+  else if (local.length >= 3) score += 0.5;
+  if (surrounded) score += 2;
+  else if (maxGap < 240) score += 0.5;
+  else score -= 2;
+  if (pathR2 != null && pathR2 >= 0.7) score += 1;
   if (pathProximity != null) {
-    if (pathProximity <= 2) score += 2;
-    else if (pathProximity <= 5) score += 1;
+    if (pathProximity <= 1) score += 2;
+    else if (pathProximity <= 3) score += 1;
+    else if (pathProximity > 5) score -= 1;
   }
-  if (radiusUsed > 10) score -= 1;
-  const confidence = score >= 4 ? 'High' : score >= 2 ? 'Medium' : 'Low';
+  if (radiusUsed > 5) score -= (radiusUsed - 5) / 5;
 
-  return { value, n: local.length, closestDist, radiusUsed, direction, pathProximity, confidence };
+  let confidence;
+  if (score >= 6 && surrounded && closestDist <= 2) confidence = 'High';
+  else if (score >= 3) confidence = 'Medium';
+  else if (score >= 0.5) confidence = 'Low';
+  else confidence = 'Inconclusive';
+
+  return {
+    value, n: local.length, closestDist, radiusUsed,
+    direction, pathProximity, pathR2, maxGap, surrounded,
+    confidence,
+  };
+}
+
+
+/* =========================================================================
+   CAUSATION ANALYSIS HELPERS
+   ========================================================================= */
+
+/* Causation score 0-100. Combines severity, confidence, spatial coverage,
+   and proximity to claim date. The whole point: rank candidate causation
+   events for a forensic claim. Higher score = stronger candidate. */
+function causationScore(est, claimDateStr, claimWindow){
+  // Severity factor (0-1): normalize hail and wind separately.
+  let severity;
+  if (est.type === 'Hail') {
+    // 0.75" = 0.25, 1.0" = 0.33, 2.0" = 0.67, 3.0"+ = 1.0
+    severity = Math.min(1.0, est.value / 3.0);
+  } else { // Wind
+    // 50 mph = 0.5, 75 = 0.75, 100+ = 1.0
+    severity = Math.min(1.0, est.value / 100.0);
+  }
+  // Confidence factor — heavily weighted, since high IDW with low confidence
+  // shouldn't beat moderate IDW with high confidence.
+  const confFactor = ({ 'High': 1.0, 'Medium': 0.6, 'Low': 0.3, 'Inconclusive': 0.1 })[est.confidence] || 0.1;
+  // Spatial coverage factor
+  const surrFactor = est.surrounded ? 1.0 : 0.5;
+  // Claim-date proximity (only applies when claim date is set)
+  let proxFactor = 1.0;
+  if (claimDateStr) {
+    const cd = new Date(claimDateStr + 'T12:00Z');
+    const ed = new Date(est.date + 'T12:00Z');
+    const days = (ed - cd) / 86400000; // signed: positive = AFTER claim
+    const absDays = Math.abs(days);
+    const w = claimWindow || 7;
+    if (absDays <= w) proxFactor = 1.0;
+    else if (absDays <= w * 4) proxFactor = 0.6;
+    else proxFactor = 0.25;
+    // Events AFTER claim date are unlikely to be the cause. Penalize.
+    if (days > w) proxFactor *= 0.3;
+  }
+  return Math.round(severity * confFactor * surrFactor * proxFactor * 100);
+}
+
+/* Mark each estimate as 'compounding' if at least one other estimate within
+   ±30 days has Medium+ confidence and Significant+ severity. Helps the
+   analyst spot back-to-back damaging storms where claim attribution might
+   span more than one event. */
+function tagCompounding(rows){
+  const significantHail = (r) => r.value >= 1.0 && r.type === 'Hail';
+  const significantWind = (r) => r.value >= 50 && r.type === 'Wind';
+  const credible = (r) => r.confidence === 'High' || r.confidence === 'Medium';
+  for (let i = 0; i < rows.length; i++) {
+    const a = rows[i];
+    if (!credible(a) || !(significantHail(a) || significantWind(a))) {
+      a.compounding = false; continue;
+    }
+    let found = false;
+    for (let j = 0; j < rows.length; j++) {
+      if (i === j) continue;
+      const b = rows[j];
+      if (!credible(b) || !(significantHail(b) || significantWind(b))) continue;
+      const days = Math.abs((new Date(a.date + 'T12:00Z') - new Date(b.date + 'T12:00Z')) / 86400000);
+      if (days <= 30) { found = true; break; }
+    }
+    a.compounding = found;
+  }
+}
+
+/* IEM Time Machine link for a given UTC date (YYYY-MM-DD). Opens the radar
+   archive viewer; user can switch to the MRMS MESH product from there. */
+function radarLink(dateStr){
+  return `https://mesonet.agron.iastate.edu/timemachine/?bdate=${dateStr}T18:00`;
 }
 
 function buildEstimates(){
@@ -740,7 +888,14 @@ function buildEstimates(){
     const est = estimateAtProperty(reports, state.ctx);
     if (est) results.push({ date: day, type, ...est });
   }
-  results.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type));
+  // Tag compounding events (within ±30d of another credible damaging event)
+  tagCompounding(results);
+  // Score each row for causation likelihood
+  const claimDate = state.ctx ? state.ctx.claimDate : null;
+  const claimWindow = state.ctx ? state.ctx.claimWindow : 7;
+  for (const r of results) r.causationScore = causationScore(r, claimDate, claimWindow);
+  // Default sort by causation score descending — "most likely cause" first.
+  results.sort((a, b) => (b.causationScore - a.causationScore) || a.date.localeCompare(b.date));
   return results;
 }
 
@@ -764,13 +919,18 @@ function renderEstimates(){
         <thead><tr>
           <th>Date (UTC)</th>
           <th>Type</th>
-          <th>Estimate at property</th>
-          <th>Reports used</th>
+          <th>Estimate</th>
+          <th>Reports</th>
           <th>Closest</th>
           <th>Radius</th>
+          <th title="Are reports distributed around the property (Yes = interpolation) or all on one side (No = extrapolation, less reliable)?">Surrounded?</th>
           <th>Storm dir</th>
-          <th>Path prox.</th>
+          <th title="Distance from property to the inferred storm track">Path prox.</th>
+          <th title="R² of the linear (lat,lon)~time fit. Higher = more coherent storm track.">Track R²</th>
+          <th title="0–100 ranking of how likely this storm caused damage. Combines severity, confidence, spatial coverage, and proximity to claim date.">Score</th>
           <th>Confidence</th>
+          <th title="Yes if another credible damaging event occurred within ±30 days — claim attribution may span events.">Compounding</th>
+          <th title="View NEXRAD/MRMS radar archive for this date in IEM Time Machine">Radar</th>
         </tr></thead>
         <tbody>
           ${rows.map(r => `
@@ -781,9 +941,14 @@ function renderEstimates(){
               <td>${r.n}</td>
               <td>${r.closestDist.toFixed(2)} mi</td>
               <td>${r.radiusUsed} mi</td>
+              <td>${r.surrounded ? '<b style="color:#27ae60">Yes</b>' : '<b style="color:#c0392b">No</b>'} <small style="color:var(--muted)">(${Math.round(r.maxGap)}°)</small></td>
               <td>${r.direction ? '<b>'+escapeHtml(r.direction)+'</b>' : '—'}</td>
               <td>${r.pathProximity != null ? r.pathProximity.toFixed(2) + ' mi' : '—'}</td>
-              <td><span class="conf conf-${r.confidence}">${r.confidence}</span></td>
+              <td>${r.pathR2 != null ? r.pathR2.toFixed(2) : '—'}</td>
+              <td><span class="score-pill" style="background:${scoreColor(r.causationScore)};">${r.causationScore}</span></td>
+              <td><span class="conf conf-${r.confidence.replace(' ','')}">${r.confidence}</span></td>
+              <td>${r.compounding ? '<span class="compound-pill">⚠ Yes</span>' : '<span style="color:var(--muted);font-size:11px">No</span>'}</td>
+              <td><a class="radar-link" href="${radarLink(r.date)}" target="_blank" rel="noopener" title="Open IEM radar archive for ${escapeHtml(r.date)}">📡</a></td>
             </tr>
           `).join('')}
         </tbody>
@@ -809,6 +974,26 @@ function offsetPoint(lat, lon, miNorth, miEast){
    ========================================================================= */
 function fmtDate(d){ if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? d : dt.toISOString().slice(0,10); }
 function fmtDateTime(d){ if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? d : dt.toISOString().slice(0,16).replace('T',' ') + ' UTC'; }
+/* Color gradient for the causation-score pill: 0=gray, 50=orange, 100=red. */
+function scoreColor(score){
+  const s = Math.max(0, Math.min(100, score || 0)) / 100;
+  // Interpolate gray (#bdc3c7) -> orange (#e67e22) -> red (#c0392b)
+  if (s < 0.5) {
+    const t = s * 2;
+    return blend("#bdc3c7", "#e67e22", t);
+  }
+  return blend("#e67e22", "#c0392b", (s - 0.5) * 2);
+}
+function blend(a, b, t){
+  const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
+  const ar = (ah >> 16) & 255, ag = (ah >> 8) & 255, ab = ah & 255;
+  const br = (bh >> 16) & 255, bg = (bh >> 8) & 255, bb = bh & 255;
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const b2 = Math.round(ab + (bb - ab) * t);
+  return `rgb(${r},${g},${b2})`;
+}
+
 function escapeHtml(s){ if (s == null) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 function setStatus(msg, type='info'){
   const el = document.getElementById('status');
@@ -819,9 +1004,8 @@ function clearStatus(){ document.getElementById('status').className = 'status'; 
 /* =========================================================================
    GEOCODING (Census Bureau onelineaddress)
    ========================================================================= */
-/* JSONP helper — Census Geocoder doesn't return CORS headers,
-   so fetch() is blocked. JSONP works by loading the response as a
-   <script> tag, which has no CORS restrictions. */
+/* JSONP helper — Census Geographies for county lookup still uses this
+   (Census doesn't return CORS headers). */
 let _jsonpCounter = 0;
 function jsonp(baseUrl, params = {}, timeoutMs = 20000){
   return new Promise((resolve, reject) => {
@@ -831,37 +1015,76 @@ function jsonp(baseUrl, params = {}, timeoutMs = 20000){
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + qs;
     const script = document.createElement('script');
     let done = false;
-
     function cleanup(){
-      if (done) return;
-      done = true;
+      if (done) return; done = true;
       try { delete window[cbName]; } catch { window[cbName] = undefined; }
       if (script.parentNode) script.parentNode.removeChild(script);
       clearTimeout(timer);
     }
-
     window[cbName] = (data) => { cleanup(); resolve(data); };
     script.onerror = () => { cleanup(); reject(new Error('Network error or service unavailable.')); };
     const timer = setTimeout(() => { cleanup(); reject(new Error('Request timed out.')); }, timeoutMs);
-
     script.src = url;
     document.head.appendChild(script);
   });
 }
 
-async function geocode(address){
-  let data;
-  try {
-    data = await jsonp('https://geocoding.geo.census.gov/geocoder/locations/onelineaddress', {
-      address, benchmark: 'Public_AR_Current',
+/* Google Geocoder — primary geocode path. */
+function geocodeGoogle(address){
+  return new Promise((resolve, reject) => {
+    if (!window._googleReady) {
+      reject(new Error('Address service still loading — try again in a moment.'));
+      return;
+    }
+    window._googleGeocoder.geocode({ address, region: 'us' }, (results, status) => {
+      if (status === 'OK' && results && results.length) {
+        const r = results[0];
+        resolve({
+          lat: r.geometry.location.lat(),
+          lon: r.geometry.location.lng(),
+          matched: r.formatted_address,
+        });
+      } else if (status === 'ZERO_RESULTS') {
+        reject(new Error('No address match. Try adding city, state, or ZIP.'));
+      } else {
+        reject(new Error(`Geocoder status: ${status}`));
+      }
     });
-  } catch (e) {
-    throw new Error(networkErrorHint('Census geocoder', e));
+  });
+}
+
+/* Google Place Details — used when user picked an autocomplete suggestion. */
+function placeDetailsGoogle(placeId){
+  return new Promise((resolve, reject) => {
+    if (!window._googleReady) { reject(new Error('Address service still loading.')); return; }
+    window._googlePlaces.getDetails(
+      { placeId, fields: ['geometry.location', 'formatted_address'] },
+      (place, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && place && place.geometry) {
+          resolve({
+            lat: place.geometry.location.lat(),
+            lon: place.geometry.location.lng(),
+            matched: place.formatted_address,
+          });
+        } else {
+          reject(new Error(`Place details status: ${status}`));
+        }
+      }
+    );
+  });
+}
+
+/* Geocode entry point. If the user picked an autocomplete suggestion, use
+   the placeId for accuracy; otherwise fall back to the Geocoder by text. */
+async function geocode(address){
+  if (window._selectedPlace && window._selectedPlace.text === address && window._selectedPlace.placeId) {
+    try {
+      return await placeDetailsGoogle(window._selectedPlace.placeId);
+    } catch (e) {
+      // fall through to geocoder
+    }
   }
-  const matches = data?.result?.addressMatches || [];
-  if (!matches.length) throw new Error('No address match. Try adding city, state, or ZIP.');
-  const m = matches[0];
-  return { lat: m.coordinates.y, lon: m.coordinates.x, matched: m.matchedAddress };
+  return geocodeGoogle(address);
 }
 
 // Translate generic fetch / JSONP failures into actionable messages.
@@ -1155,7 +1378,6 @@ function renderDashboard(){
     <div class="kpi"><div class="num">${byCat.Tornado || 0}</div><div class="lbl">Tornado</div></div>
     <div class="kpi"><div class="num">${maxHail ? maxHail.toFixed(2) + '"' : '—'}</div><div class="lbl">Max hail</div></div>
     <div class="kpi"><div class="num">${maxWind ? maxWind + ' mph' : '—'}</div><div class="lbl">Max gust</div></div>
-    <div class="kpi"><div class="num">${damaging}</div><div class="lbl">Likely damaging</div></div>
     <div class="kpi"><div class="num">${closest != null ? closest.toFixed(2) + ' mi' : '—'}</div><div class="lbl">Closest</div></div>
   `;
 
@@ -1179,6 +1401,11 @@ function renderDashboard(){
       ${inWindow != null ? `<div class="status warn" style="display:block;">${inWindow} event${inWindow===1?'':'s'} within ± ${ctx.claimWindow} day${ctx.claimWindow===1?'':'s'} of claim date.</div>` : ''}
     </div>
 
+    <div class="plotly-grid">
+      <div class="chart-box"><h3>Events around property — direction &amp; distance</h3><div id="plot-polar" class="plotly-chart"></div></div>
+      <div class="chart-box"><h3>Hail causation timeline — candidate days for damage attribution</h3><div id="plot-causation-Hail" class="plotly-chart"></div></div>
+      <div class="chart-box"><h3>Wind causation timeline — candidate days for damage attribution</h3><div id="plot-causation-Wind" class="plotly-chart"></div></div>
+    </div>
     <div class="chart-grid">
       <div class="chart-box"><h3>Events per year</h3><canvas id="chart-year"></canvas></div>
       <div class="chart-box"><h3>Events by type</h3><canvas id="chart-type"></canvas></div>
@@ -1258,6 +1485,157 @@ function drawCharts(evts){
     data:{ labels: distLabels, datasets:[{ label:'Events by distance (mi)', data: distBuckets, backgroundColor:'#27ae60' }] },
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} },
   });
+
+  drawPlotlyCharts(evts);
+}
+
+function drawPlotlyCharts(evts){
+  if (typeof Plotly === 'undefined') return;
+  const ctx = state.ctx;
+
+  // ----- Polar scatter: bearing from property vs distance, sized by mag, colored by category
+  const polarTraces = {};
+  for (const e of evts) {
+    if (e.distance == null) continue;
+    const cat = e.category;
+    if (!polarTraces[cat]) {
+      polarTraces[cat] = {
+        type: 'scatterpolar', mode: 'markers', name: cat,
+        r: [], theta: [], customdata: [],
+        marker: { color: CATEGORY_COLORS[cat] || '#888', size: [], line: { color: '#fff', width: 1 }, opacity: 0.85 },
+        hovertemplate: '<b>%{customdata[0]}</b><br>Date: %{customdata[1]}<br>Mag: %{customdata[2]}<br>%{r:.2f} mi · %{theta:.0f}°<extra></extra>',
+      };
+    }
+    const bearing = bearingDeg(ctx.lat, ctx.lon, e.lat, e.lon);
+    polarTraces[cat].r.push(e.distance);
+    polarTraces[cat].theta.push(bearing);
+    const m = e.magnitude;
+    polarTraces[cat].marker.size.push(m == null ? 6 : Math.min(20, 4 + Math.log(m + 1) * 4));
+    polarTraces[cat].customdata.push([
+      e.type,
+      e.valid ? String(e.valid).slice(0, 16).replace('T', ' ') : '',
+      m == null ? '—' : (cat === 'Wind' ? Math.round(m) + ' mph' : m.toFixed(2) + (cat === 'Hail' ? '"' : '')),
+    ]);
+  }
+  const polarData = Object.values(polarTraces);
+  polarData.push({
+    type: 'scatterpolar', mode: 'markers', name: 'Property',
+    r: [0], theta: [0], showlegend: true,
+    marker: { color: '#1f4e78', size: 14, symbol: 'star', line: { color: '#fff', width: 2 } },
+    hovertemplate: '<b>Property</b><br>%{text}<extra></extra>', text: [ctx.matchedAddress || ''],
+  });
+  Plotly.newPlot('plot-polar', polarData, {
+    margin: { t: 30, l: 30, r: 30, b: 30 },
+    showlegend: true,
+    legend: { orientation: 'h', y: -0.1 },
+    polar: {
+      angularaxis: {
+        direction: 'clockwise', rotation: 90,
+        tickmode: 'array',
+        tickvals: [0, 45, 90, 135, 180, 225, 270, 315],
+        ticktext: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
+      },
+      radialaxis: { title: 'Distance (mi)', angle: 90 },
+    },
+  }, { responsive: true, displayModeBar: false });
+
+  // ----- Causation timelines (Hail + Wind) -----
+  drawCausationTimeline();
+}
+
+const CONF_COLORS = {
+  'High': '#27ae60',
+  'Medium': '#e67e22',
+  'Low': '#f1c40f',
+  'Inconclusive': '#95a5a6',
+};
+
+function drawCausationTimeline(){
+  if (typeof Plotly === 'undefined' || !state.ctx) return;
+  const ests = buildEstimates();
+  const claimDate = state.ctx.claimDate ? new Date(state.ctx.claimDate + 'T12:00Z') : null;
+
+  for (const type of ['Hail', 'Wind']) {
+    const div = document.getElementById('plot-causation-' + type);
+    if (!div) continue;
+    const rows = ests.filter(r => r.type === type);
+    if (!rows.length) {
+      Plotly.purge(div);
+      div.innerHTML = `<div class="empty" style="padding:40px;color:var(--muted);"><div>No ${type.toLowerCase()} candidate days in this search.</div></div>`;
+      continue;
+    }
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+
+    const maxY = Math.max(...rows.map(r => r.value)) * 1.2;
+
+    // Single trace using per-bar marker color/opacity reflecting confidence
+    const trace = {
+      type: 'bar',
+      x: rows.map(r => r.date),
+      y: rows.map(r => r.value),
+      marker: {
+        color: rows.map(r => CONF_COLORS[r.confidence] || '#95a5a6'),
+        opacity: rows.map(r => r.confidence === 'Inconclusive' ? 0.35 :
+                                r.confidence === 'Low' ? 0.55 :
+                                r.confidence === 'Medium' ? 0.8 : 0.95),
+        line: { color: '#fff', width: 0.5 },
+      },
+      customdata: rows.map(r => [
+        r.confidence,
+        r.n,
+        r.closestDist.toFixed(2),
+        r.causationScore,
+        r.surrounded ? 'surrounded' : 'on-edge',
+      ]),
+      hovertemplate: '<b>%{x}</b><br>Estimate: %{y}<br>Confidence: %{customdata[0]} (%{customdata[4]})<br>Reports: %{customdata[1]}, closest %{customdata[2]} mi<br>Causation score: <b>%{customdata[3]}/100</b><extra></extra>',
+    };
+
+    // Top 3 candidates by causation score get arrows
+    const top3 = [...rows].sort((a, b) => b.causationScore - a.causationScore).slice(0, 3);
+    const annotations = top3
+      .filter(r => r.causationScore > 0)
+      .map((r, i) => ({
+        x: r.date, y: r.value,
+        text: `#${i + 1} · ${r.causationScore}`,
+        showarrow: true, arrowhead: 3, arrowcolor: CONF_COLORS[r.confidence],
+        ax: 0, ay: -28,
+        bgcolor: '#fff', bordercolor: CONF_COLORS[r.confidence],
+        font: { size: 10, color: '#333' },
+      }));
+
+    const shapes = [];
+    if (claimDate) {
+      const claimIso = claimDate.toISOString().slice(0, 10);
+      shapes.push({
+        type: 'line', xref: 'x', yref: 'paper',
+        x0: claimIso, x1: claimIso, y0: 0, y1: 1,
+        line: { color: '#c0392b', width: 2, dash: 'dash' },
+      });
+      annotations.push({
+        x: claimIso, y: 1, xref: 'x', yref: 'paper',
+        text: 'Claim date', showarrow: false,
+        font: { color: '#c0392b', size: 11, weight: 'bold' },
+        bgcolor: 'rgba(255,255,255,0.85)', bordercolor: '#c0392b',
+        yshift: 12,
+      });
+    }
+
+    // Confidence-tier legend (custom, since we use per-bar coloring not separate traces)
+    const legendEntries = Object.entries(CONF_COLORS).map(([label, color], i) => ({
+      x: 0.02 + i * 0.18, y: 1.08, xref: 'paper', yref: 'paper',
+      text: `<span style="color:${color}">■</span> ${label}`,
+      showarrow: false, font: { size: 11 },
+    }));
+
+    Plotly.newPlot(div, [trace], {
+      margin: { t: 60, l: 60, r: 30, b: 50 },
+      xaxis: { title: 'Date', type: 'date' },
+      yaxis: { title: type === 'Hail' ? 'Estimated hail size (in)' : 'Estimated wind gust (mph)', range: [0, maxY] },
+      annotations: [...annotations, ...legendEntries],
+      shapes,
+      showlegend: false,
+    }, { responsive: true, displayModeBar: false });
+  }
 }
 
 /* =========================================================================
@@ -1570,7 +1948,6 @@ function exportExcel(){
     ['Wind',                state.filtered.filter(e => e.category === 'Wind').length],
     ['Tornado',             state.filtered.filter(e => e.category === 'Tornado').length],
     ['Flood',               state.filtered.filter(e => e.category === 'Flood').length],
-    ['Likely damaging',     state.filtered.filter(e => e.damaging).length],
     ['Max hail (in)',       state.filtered.filter(e => e.category === 'Hail' && e.magnitude != null).reduce((m,e) => Math.max(m, e.magnitude), 0) || '-'],
     ['Max wind gust (mph)', state.filtered.filter(e => e.category === 'Wind' && e.magnitude != null).reduce((m,e) => Math.max(m, e.magnitude), 0) || '-'],
     ['Closest event (mi)',  state.filtered.length ? state.filtered.reduce((m, e) => Math.min(m, e.distance), Infinity).toFixed(2) : '-'],
@@ -1609,25 +1986,7 @@ function exportExcel(){
     XLSX.utils.book_append_sheet(wb, wsE, 'Estimates');
   }
 
-  // Original LSR sheet
-  if (state.rawLSR && state.rawLSR.features && state.rawLSR.features.length) {
-    const lsrHeaders = ['VALID','TYPETEXT','MAG','LAT','LON','CITY','COUNTY','STATE','SOURCE','REMARK','QUALIFY','WFO'];
-    const lsrRows = state.rawLSR.features.map(f => lsrHeaders.map(h => f.properties?.[h] ?? ''));
-    const ws3 = XLSX.utils.aoa_to_sheet([lsrHeaders, ...lsrRows]);
-    XLSX.utils.book_append_sheet(wb, ws3, 'LSR (raw)');
-  }
-
-  // SED rows sheet (all uploaded, normalized)
-  const sedAll = state.sedFiles.flatMap(f => f.rows);
-  if (sedAll.length) {
-    const sedHeaders = ['Date (UTC)','Type','Magnitude','Mag Type','TOR Scale','Lat','Lon','City','County','State','Source','Remark'];
-    const sedRows = sedAll.map(e => [
-      e.valid, e.type, e.magnitude, e.magType || '', e.torScale || '',
-      e.lat, e.lon, e.city, e.county, e.state, e.sourceDetail || '', e.remark,
-    ]);
-    const ws4 = XLSX.utils.aoa_to_sheet([sedHeaders, ...sedRows]);
-    XLSX.utils.book_append_sheet(wb, ws4, 'SED (uploaded)');
-  }
+  // (Raw LSR/SED sheets dropped — use Raw Data tab to download those separately.)
 
   const filename = 'storm-report_' + (ctx.matchedAddress || 'address').replace(/[^A-Za-z0-9]/g,'_').slice(0, 40)
                   + '_' + ctx.start + '_to_' + ctx.end + '.xlsx';
@@ -1881,17 +2240,20 @@ if (location.protocol === 'file:') {
 
 
 /* =========================================================================
-   ADDRESS AUTOCOMPLETE (Photon — OSM, CORS-enabled, free)
+   ADDRESS AUTOCOMPLETE (Google Places Autocomplete)
    ========================================================================= */
 let _autoTimer = null;
 let _autoHighlightedIdx = -1;
+let _autoCurrent = [];
 const addrInput = document.getElementById('address');
 const suggBox = document.getElementById('address-suggestions');
+
 addrInput.addEventListener('input', () => {
+  window._selectedPlace = null;
   clearTimeout(_autoTimer);
   const q = addrInput.value.trim();
-  if (q.length < 4) { suggBox.style.display = 'none'; return; }
-  _autoTimer = setTimeout(() => fetchSuggestions(q), 300);
+  if (q.length < 3) { suggBox.style.display = 'none'; return; }
+  _autoTimer = setTimeout(() => fetchSuggestions(q), 200);
 });
 addrInput.addEventListener('keydown', e => {
   const items = suggBox.querySelectorAll('.item');
@@ -1914,44 +2276,38 @@ addrInput.addEventListener('keydown', e => {
 document.addEventListener('click', e => {
   if (!addrInput.contains(e.target) && !suggBox.contains(e.target)) suggBox.style.display = 'none';
 });
-async function fetchSuggestions(q){
-  try {
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&osm_tag=:!railway`;
-    const r = await fetch(url);
-    if (!r.ok) return;
-    const data = await r.json();
-    const features = (data.features || []).filter(f => {
-      const c = (f.properties && f.properties.countrycode) || '';
-      return c === 'US' || c === '';
-    });
-    if (!features.length) { suggBox.style.display = 'none'; return; }
-    suggBox.innerHTML = features.map((f, i) => {
-      const p = f.properties || {};
-      const main = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name || '';
-      const sub  = [p.city, p.county, p.state, p.postcode].filter(Boolean).join(', ');
-      return `<div class="item" data-idx="${i}">
-        <div>${escapeHtml(main || sub)}</div>
-        ${main && sub ? `<small>${escapeHtml(sub)}</small>` : ''}
-      </div>`;
-    }).join('');
-    suggBox.style.display = 'block';
-    _autoHighlightedIdx = -1;
-    suggBox.querySelectorAll('.item').forEach(item => {
-      item.addEventListener('click', () => {
-        const idx = +item.dataset.idx;
-        const f = features[idx];
-        const p = f.properties || {};
-        const text = [
-          [p.housenumber, p.street].filter(Boolean).join(' '),
-          p.city, p.state, p.postcode,
-        ].filter(Boolean).join(', ') || p.name;
-        addrInput.value = text;
+
+function fetchSuggestions(q){
+  if (!window._googleReady) return;
+  window._googleAutocomplete.getPlacePredictions(
+    { input: q, componentRestrictions: { country: 'us' }, types: ['address'] },
+    (predictions, status) => {
+      if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions || !predictions.length) {
         suggBox.style.display = 'none';
+        return;
+      }
+      _autoCurrent = predictions;
+      suggBox.innerHTML = predictions.map((p, i) => {
+        const main = (p.structured_formatting && p.structured_formatting.main_text) || p.description;
+        const sub  = (p.structured_formatting && p.structured_formatting.secondary_text) || '';
+        return `<div class="item" data-idx="${i}">
+          <div>${escapeHtml(main)}</div>
+          ${sub ? `<small>${escapeHtml(sub)}</small>` : ''}
+        </div>`;
+      }).join('');
+      suggBox.style.display = 'block';
+      _autoHighlightedIdx = -1;
+      suggBox.querySelectorAll('.item').forEach(item => {
+        item.addEventListener('click', () => {
+          const idx = +item.dataset.idx;
+          const p = _autoCurrent[idx];
+          addrInput.value = p.description;
+          window._selectedPlace = { placeId: p.place_id, text: p.description };
+          suggBox.style.display = 'none';
+        });
       });
-    });
-  } catch (e) {
-    // Silent fail — autocomplete is a nice-to-have.
-  }
+    }
+  );
 }
 
 /* =========================================================================
@@ -1963,7 +2319,8 @@ async function saveAsImage(panelId, baseFilename){
   // For map: ensure tiles render at full size before capture
   if (panelId === 'tab-map' && state.map) state.map.invalidateSize();
 
-  // Temporarily remove the table-wrap max-height so the whole table is captured.
+  // Hide action buttons + lift table max-height while capturing.
+  el.classList.add('capturing');
   const wraps = el.querySelectorAll('.table-wrap');
   const oldMax = [];
   wraps.forEach(w => { oldMax.push(w.style.maxHeight); w.style.maxHeight = 'none'; w.style.overflow = 'visible'; });
@@ -1987,6 +2344,7 @@ async function saveAsImage(panelId, baseFilename){
     alert('Could not capture image: ' + e.message);
     console.error(e);
   } finally {
+    el.classList.remove('capturing');
     wraps.forEach((w, i) => { w.style.maxHeight = oldMax[i] || ''; w.style.overflow = ''; });
   }
 }
