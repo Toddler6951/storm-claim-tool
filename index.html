@@ -2077,6 +2077,8 @@ function exportExcel(){
 function renderCounties(){
   const card = document.getElementById('county-card');
   const div = document.getElementById('county-info');
+  // Card was removed from sidebar; function is a no-op when DOM is absent.
+  if (!card || !div) return;
   if (!state.counties || !state.counties.length) { card.style.display = 'none'; return; }
   card.style.display = 'block';
   div.innerHTML = state.counties.map(c => {
