@@ -14,6 +14,25 @@
         won't serve real ads.
      If you leave the placeholder ID, no ads load and no errors fire. -->
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7425790647094520" crossorigin="anonymous" id="adsense-script" onerror="this.remove()"></script>
+<!-- ===== Google Analytics 4 =====
+     Replace G-XXXXXXXXXX with your GA4 Measurement ID
+     (Admin → Data Streams → Web → your stream).
+     If left as the placeholder, the snippet is a no-op. -->
+<script>window.GA_MEASUREMENT_ID = "G-M4EWDXLBH9";</script>
+<script>
+  (function(){
+    var id = window.GA_MEASUREMENT_ID;
+    if (!/^G-[A-Z0-9]{4,}$/.test(id) || id === "G-XXXXXXXXXX") return;
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(id);
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function(){ dataLayer.push(arguments); };
+    gtag('js', new Date());
+    gtag('config', id, { anonymize_ip: true });
+  })();
+</script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
@@ -457,7 +476,7 @@
 <li><b>Storm-track inference</b>: with ≥3 reports the tool fits a linear regression of (lat, lon) ~ time and reports the inferred storm motion direction. The perpendicular distance from the property to that track ("path proximity") is reported. If the property is on or very close to the inferred track, that strongly suggests the storm passed over the location.</li>
 <li><b>Confidence</b> (Low / Medium / High) blends closest-report distance, report count, path proximity, and whether the adaptive radius had to expand.</li>
 </ol>
-<p><b>v2 signals exposed in the table:</b></p><ul><li><b>Surrounded?</b> — looks at the report bearings around the property and finds the largest "shadow zone". Max-gap &lt; 180° = property interpolated inside the cluster (more reliable). Max-gap &gt; 180° = property on the edge — the storm probably passed by, not over. Strong negative signal for confidence.</li><li><b>Track R²</b> — how well a straight line fits the (lat, lon) ~ time path of reports. R² &lt; 0.5 means the reports don't form a coherent storm track and inferred direction/path-proximity are not used in scoring.</li><li><b>Inconclusive</b> — explicit confidence tier when too many signals are weak or conflicting; algorithm refuses to commit to "Low" when the spatial pattern is genuinely sparse.</li></ul><p><b>Causation score (0–100)</b> ranks each candidate event by likelihood it caused / contributed to damage. Combines severity (normalized within type), confidence tier, whether reports surrounded the property, and proximity to the claim date when set. Events <em>after</em> the claim date are penalized. The Estimates table sorts by score descending by default, so the strongest candidate is the top row.</p><p><b>Compounding</b> flags days where another credible damaging event (Medium+ confidence, hail ≥1″ or wind ≥50 mph) occurred within ±30 days. Useful when claim attribution may span more than one event (e.g., back-to-back storms).</p><p><b>📡 Radar link</b> opens the <a href="https://mesonet.agron.iastate.edu/timemachine/" target="_blank" rel="noopener">Iowa Environmental Mesonet Time Machine</a> archive at the event date — switch to the MRMS MESH product to visually confirm what the radar saw at that location and time. This is the manual ground-truth check; full programmatic MESH integration is a future enhancement.</p><p>Limitations: storm direction is inferred from the report sequence — actual wind/radar (HRRR/RAP forecasts, NEXRAD MESH) are not yet pulled programmatically. UTC day grouping can split a single storm across two rows when it crosses midnight UTC. For per-point hail ground truth, the gold standard is NEXRAD MRMS MESH; until automated, use the radar link per row to verify manually.</p>
+<p><b>v2 signals exposed in the table:</b></p><ul><li><b>Surrounded?</b> — looks at the report bearings around the property and finds the largest "shadow zone". Max-gap &lt; 180° = property interpolated inside the cluster (more reliable). Max-gap &gt; 180° = property on the edge — the storm probably passed by, not over. Strong negative signal for confidence.</li><li><b>Track R²</b> — how well a straight line fits the (lat, lon) ~ time path of reports. R² &lt; 0.5 means the reports don't form a coherent storm track and inferred direction/path-proximity are not used in scoring.</li><li><b>Inconclusive</b> — explicit confidence tier when too many signals are weak or conflicting; algorithm refuses to commit to "Low" when the spatial pattern is genuinely sparse.</li></ul><p><b>Causation score (0–100)</b> ranks each candidate event by likelihood it caused / contributed to damage. Combines severity (normalized within type), confidence tier, whether reports surrounded the property, and proximity to the claim date when set. Events <em>after</em> the claim date are penalized. The Estimates table sorts by score descending by default, so the strongest candidate is the top row.</p><p><b>Compounding</b> flags days where another credible damaging event (Medium+ confidence, hail ≥1″ or wind ≥50 mph) occurred within ±30 days. Useful when claim attribution may span more than one event (e.g., back-to-back storms).</p><p><b>MESH column (Estimates tab)</b> shows the MRMS Maximum Estimated Size of Hail at the property, derived from radar reflectivity. This is independent of spotter reports — when MESH and the IDW estimate agree, that's strong corroboration; when they disagree (e.g., IDW says 2″ but MESH says 0.5″), the spotter reports may have been overestimated or the storm passed slightly off the property. MRMS data is from <a href="https://www.nssl.noaa.gov/projects/mrms/" target="_blank" rel="noopener">NOAA NSSL MRMS</a> (radar-derived, 1km grid, 24h running max). Archive begins ~2014, CONUS only.</p><p><b>📡 Radar link</b> opens the <a href="https://mesonet.agron.iastate.edu/timemachine/" target="_blank" rel="noopener">Iowa Environmental Mesonet Time Machine</a> archive at the event date — useful for visually confirming what the radar saw at that location and time alongside the MESH point estimate.</p><p>Limitations: storm direction is inferred from the report sequence — actual wind/radar (HRRR/RAP forecasts, NEXRAD MESH) are not yet pulled programmatically. UTC day grouping can split a single storm across two rows when it crosses midnight UTC. For per-point hail ground truth, the gold standard is NEXRAD MRMS MESH; until automated, use the radar link per row to verify manually.</p>
 
 <h3>Output formats</h3>
           <ul>
@@ -535,6 +554,11 @@ const SED_BASE_URL = (() => {
   const path = window.location.pathname.replace(/\/[^/]*$/, "");
   return window.location.origin + path + "/sed-data";
 })();
+
+/* MESH point-query backend (Flask service on Railway).
+   Returns radar-derived hail size at a point/date — used to corroborate
+   the spotter-report-based IDW estimate. Empty string disables MESH UI. */
+const MESH_API_URL = "https://mesh.propertywx.com";
 
 const STATE_TO_ABBR = {
   "ALABAMA":"AL","ALASKA":"AK","ARIZONA":"AZ","ARKANSAS":"AR","CALIFORNIA":"CA",
@@ -945,6 +969,7 @@ function renderEstimates(){
           <th data-est-sort="date">Date (UTC)<span class="arrow">↕</span></th>
           <th data-est-sort="type">Type<span class="arrow">↕</span></th>
           <th data-est-sort="value">Estimate<span class="arrow">↕</span></th>
+          <th title="MRMS MESH (Maximum Estimated Size of Hail) at the property — radar-derived. Asynchronously loaded from the MESH service.">MESH<span class="arrow">↕</span></th>
           <th data-est-sort="n">Reports<span class="arrow">↕</span></th>
           <th data-est-sort="closestDist">Closest<span class="arrow">↕</span></th>
           <th data-est-sort="radiusUsed">Radius<span class="arrow">↕</span></th>
@@ -963,6 +988,7 @@ function renderEstimates(){
               <td>${escapeHtml(r.date)}</td>
               <td>${escapeHtml(r.type)}</td>
               <td>${fmtVal(r)}</td>
+              <td class="mesh-cell" data-date="${escapeHtml(r.date)}" data-type="${escapeHtml(r.type)}"><span style="color:var(--muted);font-size:11px;">—</span></td>
               <td>${r.n}</td>
               <td>${r.closestDist.toFixed(2)} mi</td>
               <td>${r.radiusUsed} mi</td>
@@ -981,6 +1007,53 @@ function renderEstimates(){
     </div>
   `;
   bindEstimatesSorting();
+  loadMESHForEstimates();
+}
+
+
+/* MESH loader. For each row in the Estimates table where the type is Hail and
+   date >= 2014-01-01, asynchronously fetch the radar-derived MESH value from
+   the backend and populate the cell. Concurrent fetches are limited to 4 to
+   avoid hammering the backend. Failures (no data, out-of-coverage, network)
+   are silent — cell stays "—". */
+async function loadMESHForEstimates(){
+  if (!MESH_API_URL || !state.ctx) return;
+  const cells = Array.from(document.querySelectorAll('.mesh-cell'));
+  if (!cells.length) return;
+  const lat = state.ctx.lat;
+  const lon = state.ctx.lon;
+  const cutoff = '2014-01-01';
+
+  // Hail-only & date-eligible cells
+  const queue = cells.filter(c => c.dataset.type === 'Hail' && c.dataset.date >= cutoff);
+  // Show a subtle "loading" hint
+  for (const c of queue) c.innerHTML = '<span style="color:var(--muted);font-size:11px;font-style:italic;">…</span>';
+
+  const concurrency = 4;
+  let i = 0;
+  async function worker(){
+    while (i < queue.length) {
+      const cell = queue[i++];
+      const date = cell.dataset.date;
+      try {
+        const url = `${MESH_API_URL}/api/mesh?lat=${lat}&lon=${lon}&date=${date}`;
+        const r = await fetch(url);
+        if (!r.ok) throw 0;
+        const d = await r.json();
+        if (d.mesh_in != null) {
+          cell.innerHTML = `<b>${d.mesh_in.toFixed(2)}″</b>`;
+          cell.title = `MRMS MESH from ${d.source}`;
+        } else {
+          cell.innerHTML = '<span style="color:var(--muted);font-size:11px;">—</span>';
+          cell.title = d.note || 'No MESH data for this date/location.';
+        }
+      } catch {
+        cell.innerHTML = '<span style="color:var(--muted);font-size:11px;">—</span>';
+        cell.title = 'MESH service unreachable.';
+      }
+    }
+  }
+  await Promise.all(Array.from({length: concurrency}, worker));
 }
 
 function bindEstimatesSorting(){
@@ -1530,10 +1603,9 @@ function renderDashboard(){
     <div class="plotly-grid">
       <div class="chart-box"><h3>Hail causation timeline — candidate days for damage attribution</h3><div id="plot-causation-Hail" class="plotly-chart"></div></div>
       <div class="chart-box"><h3>Wind causation timeline — candidate days for damage attribution</h3><div id="plot-causation-Wind" class="plotly-chart"></div></div>
+      <div class="chart-box"><h3>Events by year and type</h3><div id="plot-year-type" class="plotly-chart"></div></div>
     </div>
     <div class="chart-grid">
-      <div class="chart-box"><h3>Events per year</h3><canvas id="chart-year"></canvas></div>
-      <div class="chart-box"><h3>Events by type</h3><canvas id="chart-type"></canvas></div>
       <div class="chart-box"><h3>Hail size distribution</h3><canvas id="chart-hail"></canvas></div>
       <div class="chart-box"><h3>Distance distribution</h3><canvas id="chart-dist"></canvas></div>
     </div>
@@ -1546,34 +1618,6 @@ function drawCharts(evts){
   // destroy any prior
   Object.values(state.charts).forEach(c => c.destroy && c.destroy());
   state.charts = {};
-
-  // by year
-  const yearCounts = {};
-  for (const e of evts) {
-    const y = e.date ? e.date.getUTCFullYear() : 'Unknown';
-    yearCounts[y] = (yearCounts[y] || 0) + 1;
-  }
-  const years = Object.keys(yearCounts).sort();
-  state.charts.year = new Chart(document.getElementById('chart-year'), {
-    type: 'bar',
-    data: {
-      labels: years,
-      datasets: [{ label: 'Events', data: years.map(y => yearCounts[y]), backgroundColor: '#1f4e78' }],
-    },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} },
-  });
-
-  // by type
-  const cats = ['Hail','Wind','Tornado','Flood','Lightning','Winter','Other'];
-  const catCounts = cats.map(c => evts.filter(e => e.category === c).length);
-  state.charts.type = new Chart(document.getElementById('chart-type'), {
-    type: 'bar',
-    data: {
-      labels: cats,
-      datasets: [{ label:'Events', data: catCounts, backgroundColor: cats.map(c => CATEGORY_COLORS[c]) }],
-    },
-    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} },
-  });
 
   // hail bucket distribution
   const hailBuckets = ['<0.75″','0.75–1.0','1.0–1.5','1.5–2.25','≥2.25″'];
@@ -1619,6 +1663,44 @@ function drawPlotlyCharts(evts){
 
   // Polar scatter removed — map covers spatial layout. Causation timelines below.
   drawCausationTimeline();
+  drawYearTypeStacked(evts);
+}
+
+function drawYearTypeStacked(evts){
+  if (typeof Plotly === 'undefined') return;
+  const cats = ['Hail','Wind','Tornado','Flood','Lightning','Winter','Other'];
+  // collect years that actually have events
+  const yearSet = new Set();
+  for (const e of evts) if (e.date) yearSet.add(e.date.getUTCFullYear());
+  const years = Array.from(yearSet).sort();
+  if (!years.length) { Plotly.purge('plot-year-type'); return; }
+  const yearLabels = years.map(String);
+  // count events per (cat, year)
+  const counts = {};
+  for (const c of cats) counts[c] = years.map(() => 0);
+  for (const e of evts) {
+    if (!e.date) continue;
+    const yi = years.indexOf(e.date.getUTCFullYear());
+    if (yi < 0) continue;
+    if (counts[e.category]) counts[e.category][yi]++;
+  }
+  // one trace per category, stacked horizontally
+  const traces = cats
+    .filter(c => counts[c].some(v => v > 0))
+    .map(c => ({
+      type: 'bar', orientation: 'h', name: c,
+      y: yearLabels, x: counts[c],
+      marker: { color: CATEGORY_COLORS[c] || '#888' },
+      hovertemplate: '<b>%{y}</b><br>' + c + ': %{x}<extra></extra>',
+    }));
+  Plotly.newPlot('plot-year-type', traces, {
+    barmode: 'stack',
+    margin: { t: 20, l: 60, r: 30, b: 50 },
+    xaxis: { title: 'Event count' },
+    yaxis: { title: 'Year', autorange: 'reversed' },
+    legend: { orientation: 'h', y: -0.2 },
+    height: Math.max(280, Math.min(640, 24 * yearLabels.length + 100)),
+  }, { responsive: true, displayModeBar: false });
 }
 
 const CONF_COLORS = {
