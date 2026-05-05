@@ -159,6 +159,11 @@
   .composite-cell .sig-count{font-weight:400;font-size:10.5px;color:var(--muted);margin-left:3px;}
   .composite-cell.composite-2plus{color:var(--primary);}
   .signal-loading{color:var(--muted);font-size:11px;font-style:italic;}
+  /* POSH sub-line under the MESH value. Color/weight escalates above 50%
+     (POSH's own "severe hail probable" threshold) so a strong POSH endorses
+     the MESH magnitude visually without an extra column. */
+  .posh-sub{display:block;font-size:10.5px;font-weight:400;color:var(--muted);line-height:1.15;margin-top:1px;}
+  .posh-sub.posh-strong{color:#c0392b;font-weight:600;}
   /* Contractor leads CTA — sober inline card, FTC-compliant disclosure */
   .contractor-cta{margin-top:18px;padding:14px 16px;border:1px solid var(--border);border-left:3px solid var(--accent);background:#fbfaf6;border-radius:6px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;}
   .contractor-cta .body{flex:1 1 320px;font-size:13px;color:var(--text);line-height:1.5;}
@@ -485,14 +490,33 @@
           <p>Distances are computed using the Haversine formula (great-circle, mean Earth radius 3,958.8 mi). For radii under ~50 mi this is accurate within tenths of a mile.</p>
 
           <h3>Per-day estimates (Estimates tab)</h3>
-<p>The Estimates tab emits one row per day per event type (Hail / Wind) — but only for days where at least one report of that type fell within 5 mi of the property. Each estimate is computed as follows:</p>
+<p>The Estimates tab emits one row per day per event type (Hail / Wind) — but only for days where at least one report of that type fell within 5 mi of the property. Each row shows multiple independent estimates side-by-side and a single <b>Composite</b> that combines them.</p>
+
+<p><b>Estimate sources, in their own columns:</b></p>
 <ol>
-<li><b>Inverse Distance Weighting (IDW)</b> with exponent <code>p=2</code>: each report's contribution is weighted by 1/distance². The 0.5 mi epsilon prevents an at-property report from dominating completely.</li>
-<li><b>Adaptive radius</b>: starts at 5 mi; if fewer than three reports are inside, expands to 10 → 15 → 20 mi. The radius actually used is shown so you can judge how local the estimate really is.</li>
-<li><b>Storm-track inference</b>: with ≥3 reports the tool fits a linear regression of (lat, lon) ~ time and reports the inferred storm motion direction. The perpendicular distance from the property to that track ("path proximity") is reported. If the property is on or very close to the inferred track, that strongly suggests the storm passed over the location.</li>
-<li><b>Confidence</b> (Low / Medium / High) blends closest-report distance, report count, path proximity, and whether the adaptive radius had to expand.</li>
+<li><b>IDW</b> (inverse-distance-weighted from local LSR/SED reports). Exponent p=2; 0.5 mi epsilon. Adaptive radius: starts at 5 mi and expands to 10 → 15 → 20 mi if fewer than three reports are inside. Hover the IDW value to see the diagnostics that drive the geometry confidence — report count, closest distance, search radius actually used, whether the property was surrounded by reports (max angular gap), the inferred storm direction, the perpendicular distance from the property to the storm track ("path proximity"), and the R² of the (lat, lon) ~ time fit.</li>
+<li><b>MRMS MESH</b> — radar-derived Maximum Estimated Size of Hail at the property's grid cell, served by our backend that fetches GRIB2 directly from the NOAA <code>noaa-mrms-pds</code> S3 bucket (with Iowa State Mesonet as historical fallback). The cell shows the 24-hour maximum; hover for the peak 6-hour window (which narrows the timing within the day) and the POSH probability sample. MRMS is independent of spotter reports — when MESH and IDW agree, that's strong corroboration; when they disagree, the spotter reports may have been overestimated or the storm passed slightly off the property. Archive begins ~2014, CONUS only.</li>
+<li><b>Composite</b> is an unweighted average of all available signals on the row. The "(N src)" badge tells you how many signals contributed: 1 source = single-signal (treat as informational), 2+ = multi-signal corroboration (treat as a stronger estimate).</li>
 </ol>
-<p><b>v2 signals exposed in the table:</b></p><ul><li><b>Surrounded?</b> — looks at the report bearings around the property and finds the largest "shadow zone". Max-gap &lt; 180° = property interpolated inside the cluster (more reliable). Max-gap &gt; 180° = property on the edge — the storm probably passed by, not over. Strong negative signal for confidence.</li><li><b>Track R²</b> — how well a straight line fits the (lat, lon) ~ time path of reports. R² &lt; 0.5 means the reports don't form a coherent storm track and inferred direction/path-proximity are not used in scoring.</li><li><b>Inconclusive</b> — explicit confidence tier when too many signals are weak or conflicting; algorithm refuses to commit to "Low" when the spatial pattern is genuinely sparse.</li></ul><p><b>Causation score (0–100)</b> ranks each candidate event by likelihood it caused / contributed to damage. Combines severity (normalized within type), confidence tier, whether reports surrounded the property, and proximity to the claim date when set. Events <em>after</em> the claim date are penalized. The Estimates table sorts by score descending by default, so the strongest candidate is the top row.</p><p><b>Compounding</b> flags days where another credible damaging event (Medium+ confidence, hail ≥1″ or wind ≥50 mph) occurred within ±30 days. Useful when claim attribution may span more than one event (e.g., back-to-back storms).</p><p><b>MESH column (Estimates tab)</b> shows the MRMS Maximum Estimated Size of Hail at the property, derived from radar reflectivity. This is independent of spotter reports — when MESH and the IDW estimate agree, that's strong corroboration; when they disagree (e.g., IDW says 2″ but MESH says 0.5″), the spotter reports may have been overestimated or the storm passed slightly off the property. MRMS data is from <a href="https://www.nssl.noaa.gov/projects/mrms/" target="_blank" rel="noopener">NOAA NSSL MRMS</a> (radar-derived, 1km grid, 24h running max). Archive begins ~2014, CONUS only.</p><p><b>📡 Radar link</b> opens the <a href="https://mesonet.agron.iastate.edu/timemachine/" target="_blank" rel="noopener">Iowa Environmental Mesonet Time Machine</a> archive at the event date — useful for visually confirming what the radar saw at that location and time alongside the MESH point estimate.</p><p>Limitations: storm direction is inferred from the report sequence — actual wind/radar (HRRR/RAP forecasts, NEXRAD MESH) are not yet pulled programmatically. UTC day grouping can split a single storm across two rows when it crosses midnight UTC. For per-point hail ground truth, the gold standard is NEXRAD MRMS MESH; until automated, use the radar link per row to verify manually.</p>
+
+<p><b>Confidence</b> (Inconclusive / Low / Medium / High) is rebuilt from <em>signal agreement</em>, not just IDW geometry:</p>
+<ul>
+<li><b>High</b> — both IDW and MESH ≥ 1″ and within ~50% of each other (multi-signal severe-hail consensus).</li>
+<li><b>Medium</b> — both signals exist above the noise floor (≥0.25″) and roughly agree.</li>
+<li><b>Low</b> — signals disagree (e.g., IDW says 2″ but MESH says 0″) — something happened but magnitude is unclear.</li>
+<li><b>Inconclusive</b> — both signals essentially say no hail (&lt;0.25″), or only one signal exists and the IDW geometry is too sparse to commit.</li>
+</ul>
+<p>For Wind rows there's no MRMS equivalent yet, so confidence falls back to the IDW-geometry ladder (closest distance, report count, surrounded, path proximity, etc.).</p>
+
+<p><b>Causation score (0–100)</b> ranks each candidate event by likelihood it caused / contributed to damage. Combines severity (normalized within type), the rebuilt confidence tier, whether reports surrounded the property, and proximity to the claim date when set. Events <em>after</em> the claim date are penalized. The table sorts by score descending by default, so the strongest candidate is the top row.</p>
+
+<p><b>Compounding</b> flags days where another credible damaging event (Medium+ confidence, hail ≥1″ or wind ≥50 mph) occurred within ±30 days. Useful when claim attribution may span more than one event (e.g., back-to-back storms).</p>
+
+<p><b>📡 Radar link</b> opens the <a href="https://mesonet.agron.iastate.edu/timemachine/" target="_blank" rel="noopener">Iowa Environmental Mesonet Time Machine</a> at the event date so you can visually confirm what the radar saw alongside the MESH point estimate.</p>
+
+<p><b>POSH (Probability of Severe Hail)</b> is a separate MRMS product showing the radar-derived probability that ≥ 1″ hail is occurring at a point. It's instantaneous, not a window max, so a fixed 4-times-per-day schedule almost always reads 0% even at real hail events. The backend handles this by sampling POSH at 15-minute cadence <em>only inside the MESH peak 6-hour window</em> when MESH detected hail, then keeping the maximum. POSH ≥ 50% is the radar's own "severe hail probable" threshold and appears in red below the MESH value when reached; it also promotes the row to High confidence when MESH or IDW agree on severe hail (radar endorsement). On silent days (MESH 0 everywhere) POSH falls back to the cheap 4-sample schedule.</p>
+
+<p><b>Other limitations:</b> UTC day grouping can split a single storm across two rows when it crosses midnight UTC. CoCoRaHS volunteer hail reports are not pulled separately because they already flow into NCEI SED, so they're already represented inside the IDW signal — the only gap is very recent events (within ~60 days) before SED publishes; for those, the LSR feed remains the ground-truth source until SED catches up.</p>
 
 <h3>Sponsored content disclosure</h3>
 <p>When the Estimates tab surfaces a credible damaging event (≥1″ hail or ≥58 mph wind, with confidence Low/Medium/High — never on Inconclusive rows), a sponsored link to a contractor-leads marketplace may appear below the table. PropertyWX may earn a commission if you connect through that link. The link's appearance does not change any analysis above it — the same rows, scores, and confidence tiers display whether or not the affiliate program is enabled. The Inconclusive tier is intentionally excluded from sponsored links so we don't monetize uncertainty.</p>
@@ -502,9 +526,9 @@
             <li><b>Dashboard:</b> KPIs and charts across the full result set.</li>
             <li><b>Map:</b> Property + radius rings (5/10/15 mi + your custom) + event markers, color-coded by type.</li>
             <li><b>Table:</b> Sortable, filterable list with date, type, magnitude, distance, severity, source.</li>
-<li><b>Estimates:</b> Per-day IDW estimates at the property for hail size and wind speed (see methodology above).</li>
+<li><b>Estimates:</b> Per-day multi-source estimates (IDW + MRMS MESH + Composite) at the property for hail size and wind speed. Hover any value for diagnostics (see methodology above).</li>
             <li><b>Raw Data:</b> Original LSR JSON, original SED CSV (passthrough), and a merged Combined CSV.</li>
-            <li><b>Excel export:</b> Multi-sheet .xlsx workbook (Report, Combined, LSR, SED) for archival.</li>
+            <li><b>Excel export:</b> Multi-sheet .xlsx workbook for archival. The Estimates sheet now mirrors the on-screen layout (IDW, MRMS MESH 24h, MESH peak 6h, Composite, signal-agreement confidence, score, compounding) plus the IDW diagnostics columns at the end for the audit trail.</li>
             <li><b>Print:</b> Browser print → PDF for one-page claim reports.</li>
           </ul>
 
@@ -1004,10 +1028,20 @@ function idwTooltip(r){
 }
 function meshTooltip(r){
   const lines = [];
-  lines.push(`MRMS MESH — Maximum Estimated Size of Hail (radar-derived)`);
-  if (r._meshIn != null) lines.push(`24h max: ${r._meshIn.toFixed(2)}″`);
-  if (r._meshPeakIn != null) lines.push(`Peak (6h window): ${r._meshPeakIn.toFixed(2)}″ in ${r._meshPeakWindow || '?'} UTC`);
-  if (r._poshPct != null) lines.push(`POSH (peak): ${r._poshPct}% in ${r._poshPeakWindow || '?'} UTC`);
+  lines.push(`MRMS — radar-derived hail signals`);
+  if (r._meshIn != null) lines.push(`MESH 24h max: ${r._meshIn.toFixed(2)}″`);
+  if (r._meshPeakIn != null) lines.push(`MESH peak (6h): ${r._meshPeakIn.toFixed(2)}″ in ${r._meshPeakWindow || '?'} UTC`);
+  if (r._poshPct != null) {
+    let poshLine = `POSH peak: ${r._poshPct}%`;
+    if (r._poshPeakTs && r._poshPeakTs.length >= 4) {
+      poshLine += ` at ${r._poshPeakTs.slice(0,2)}:${r._poshPeakTs.slice(2,4)} UTC`;
+    } else if (r._poshPeakWindow) {
+      poshLine += ` in ${r._poshPeakWindow} UTC`;
+    }
+    if (r._poshScanCount) poshLine += ` (${r._poshScanCount} frames scanned)`;
+    lines.push(poshLine);
+    if (r._poshPct >= 50) lines.push(`POSH ≥ 50% — radar endorses severe hail at this point`);
+  }
   if (r._meshSource) lines.push(`Source: ${r._meshSource}`);
   return lines.join('\n');
 }
@@ -1043,26 +1077,38 @@ function computeComposite(r){
   return { value: avg, signals };
 }
 
-/* Recompute confidence using signal agreement, not just IDW geometry. The
-   point of having multiple sources is that two corroborating signals are
-   more trustworthy than one — and disagreement is itself diagnostic. Wind
-   rows fall back to the IDW geometry confidence (no second signal yet). */
+/* Recompute confidence using signal agreement (not just IDW geometry) and
+   POSH endorsement. POSH ≥ 50% is the radar's own "severe hail probable"
+   threshold — when a strong POSH lines up with a positive MESH/IDW reading,
+   that's independent corroboration that severe hail occurred at the point.
+   Wind rows fall back to the IDW geometry confidence (no MRMS wind product). */
 function rebuildConfidence(r){
   const baseConf = r.confidence;             // IDW-geometry confidence
   if (r.type !== 'Hail') return baseConf;
-  if (r._meshIn == null) return baseConf;    // MESH not loaded / not in coverage
 
   const idw  = r.value;
   const mesh = r._meshIn;
+  const posh = r._poshPct;
+  const strongPosh = posh != null && posh >= 50;
+
+  // No MESH data yet — POSH alone (when strong) can still bump Medium → High
+  if (mesh == null) {
+    if (strongPosh && baseConf === 'Medium') return 'High';
+    return baseConf;
+  }
+
   const max = Math.max(idw, mesh);
   const min = Math.min(idw, mesh);
   // "Agree" means both small (<0.25) or within ~50% of each other.
   const agree = (max < 0.25) || (max > 0 && (min / max) >= 0.5);
 
-  if (max < 0.25) return 'Inconclusive';     // both signals say no hail
-  if (min >= 1.0 && agree) return 'High';    // both ≥1″ and consistent
-  if (min >= 0.25 && agree) return 'Medium'; // both above noise floor and consistent
-  if (!agree && max >= 1.0) return 'Low';    // one severe, one zero — magnitude unclear
+  if (max < 0.25) return 'Inconclusive';                   // both say no hail
+  if (min >= 1.0 && agree) return 'High';                  // both ≥1″ and consistent
+  if (strongPosh && max >= 1.0) return 'High';             // POSH endorses severe → High
+  if (min >= 0.25 && agree) return 'Medium';               // both above noise floor
+  if (!agree && max >= 1.0) {
+    return strongPosh ? 'Medium' : 'Low';                  // POSH bumps disagree case up
+  }
   return baseConf;
 }
 
@@ -1091,6 +1137,8 @@ function renderEstimates(){
         r._meshSource = p._meshSource;
         r._poshPct = p._poshPct;
         r._poshPeakWindow = p._poshPeakWindow;
+        r._poshPeakTs = p._poshPeakTs;
+        r._poshScanCount = p._poshScanCount;
       }
     }
   }
@@ -1124,7 +1172,10 @@ function renderEstimates(){
   const fmtMESH = (r) => {
     if (r.type !== 'Hail') return '<span class="signal-cell muted">—</span>';
     if (r._meshIn == null)  return '<span class="signal-loading mesh-cell-inner">…</span>';
-    return `<span class="signal-cell" title="${escapeHtml(meshTooltip(r))}"><b>${r._meshIn.toFixed(2)}″</b></span>`;
+    const poshLine = (r._poshPct != null && r._poshPct >= 10)
+      ? `<span class="posh-sub${r._poshPct >= 50 ? ' posh-strong' : ''}">POSH ${r._poshPct}%</span>`
+      : '';
+    return `<span class="signal-cell" title="${escapeHtml(meshTooltip(r))}"><b>${r._meshIn.toFixed(2)}″</b>${poshLine}</span>`;
   };
   const fmtComposite = (r) => {
     if (r._composite == null) return '<span class="muted">—</span>';
@@ -1253,12 +1304,15 @@ async function loadMESHForEstimates(){
   });
   for (const c of queue) c.innerHTML = '<span class="signal-loading">…</span>';
   function refreshRowDom(cell, row){
-    // MESH cell
+    // MESH cell — value with optional POSH sub-line
     if (row._meshIn == null) {
       cell.innerHTML = '<span class="signal-cell muted">—</span>';
       cell.title = row._meshNote || 'No MESH data for this date/location.';
     } else {
-      cell.innerHTML = `<span class="signal-cell" title="${escapeHtml(meshTooltip(row))}"><b>${row._meshIn.toFixed(2)}″</b></span>`;
+      const poshLine = (row._poshPct != null && row._poshPct >= 10)
+        ? `<span class="posh-sub${row._poshPct >= 50 ? ' posh-strong' : ''}">POSH ${row._poshPct}%</span>`
+        : '';
+      cell.innerHTML = `<span class="signal-cell" title="${escapeHtml(meshTooltip(row))}"><b>${row._meshIn.toFixed(2)}″</b>${poshLine}</span>`;
     }
     // Composite cell + confidence pill — siblings inside the same row
     const tr = cell.closest('tr');
@@ -1315,6 +1369,8 @@ async function loadMESHForEstimates(){
         if (d && d.posh) {
           row._poshPct         = d.posh.max_pct;
           row._poshPeakWindow  = d.posh.peak_window_utc;
+          row._poshPeakTs      = d.posh.peak_ts;
+          row._poshScanCount   = d.posh.scan_count;
         }
         if (d && d.note) row._meshNote = d.note;
       } catch {
@@ -2597,8 +2653,13 @@ async function runSearch(e){
   const claimDate = document.getElementById('claim-date').value || null;
   const claimWindow = parseInt(document.getElementById('claim-window').value || '7', 10);
 
-  if (!address || !start || !end || !radius) {
-    setStatus('Please fill in address, dates, and radius.', 'error');
+  // Either an address OR a manual lat/lon pair is acceptable. The geocode()
+  // override at the bottom of this file handles the empty-address case.
+  const manualLat = parseFloat(document.getElementById('manual-lat').value);
+  const manualLon = parseFloat(document.getElementById('manual-lon').value);
+  const hasManualLL = !isNaN(manualLat) && !isNaN(manualLon);
+  if ((!address && !hasManualLL) || !start || !end || !radius) {
+    setStatus('Provide an address (or lat/lon), dates, and radius.', 'error');
     return;
   }
   if (new Date(start) > new Date(end)) {
