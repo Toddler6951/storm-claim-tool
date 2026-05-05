@@ -164,6 +164,43 @@
      the MESH magnitude visually without an extra column. */
   .posh-sub{display:block;font-size:10.5px;font-weight:400;color:var(--muted);line-height:1.15;margin-top:1px;}
   .posh-sub.posh-strong{color:#c0392b;font-weight:600;}
+  /* NEXRAD verify button — appears in the Radar column on rows with
+     MRMS MESH ≥ 1″ as a "deep dive" trigger. Compact so it fits inline
+     next to the existing IEM Time Machine link. */
+  .verify-btn{display:inline-block;margin-left:6px;padding:2px 7px;font-size:11px;font-weight:600;
+              background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;
+              vertical-align:middle;}
+  .verify-btn:hover{background:var(--primary-light);}
+  .verify-btn:disabled{background:#95a5a6;cursor:wait;}
+  .verify-btn .spin{display:inline-block;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .verify-done{display:inline-block;margin-left:6px;padding:2px 7px;font-size:11px;font-weight:600;
+               background:#27ae60;color:#fff;border:none;border-radius:4px;cursor:pointer;}
+  .verify-done.contradicts{background:#c0392b;}
+  /* NEXRAD verdict modal */
+  .nexrad-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;}
+  .nexrad-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.55);}
+  .nexrad-modal-content{position:relative;background:#fff;border-radius:8px;max-width:780px;width:92%;
+                         max-height:90vh;overflow-y:auto;padding:22px 24px;box-shadow:0 12px 40px rgba(0,0,0,0.25);}
+  .nexrad-modal-content h2{margin:0 0 4px 0;font-size:18px;color:var(--primary);}
+  .nexrad-modal-content .subtitle{font-size:12px;color:var(--muted);margin-bottom:14px;}
+  .nexrad-modal-close{position:absolute;top:10px;right:14px;background:none;border:none;font-size:24px;
+                      line-height:1;cursor:pointer;color:var(--muted);}
+  .nexrad-modal-close:hover{color:var(--text);}
+  .nexrad-verdict{padding:12px 14px;border-radius:6px;margin-bottom:14px;font-size:14px;font-weight:600;}
+  .nexrad-verdict.confirms{background:#fde6e1;color:#7b1f1f;border-left:4px solid #c0392b;}
+  .nexrad-verdict.contradicts{background:#eaf6ff;color:#1f4e78;border-left:4px solid #3498db;}
+  .nexrad-verdict.neutral{background:#f5f3ee;color:var(--text);border-left:4px solid var(--muted);}
+  .nexrad-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:10px;margin-bottom:14px;}
+  .nexrad-grid .cell{background:#f7f6f1;border-radius:5px;padding:8px 10px;}
+  .nexrad-grid .cell .lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .nexrad-grid .cell .val{font-size:15px;font-weight:700;color:var(--text);margin-top:2px;}
+  .nexrad-narrative{font-size:13px;line-height:1.5;color:var(--text);background:#fbfaf6;
+                    border-left:3px solid var(--accent);padding:10px 12px;margin-bottom:14px;border-radius:0 4px 4px 0;}
+  .nexrad-image{width:100%;height:auto;border-radius:4px;border:1px solid var(--border);}
+  .nexrad-meta{font-size:11.5px;color:var(--muted);margin-top:8px;}
+  .nexrad-loading{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px;}
+  .nexrad-loading .spin{display:inline-block;font-size:24px;margin-bottom:10px;animation:spin 1.4s linear infinite;}
   /* Contractor leads CTA — sober inline card, FTC-compliant disclosure */
   .contractor-cta{margin-top:18px;padding:14px 16px;border:1px solid var(--border);border-left:3px solid var(--accent);background:#fbfaf6;border-radius:6px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;}
   .contractor-cta .body{flex:1 1 320px;font-size:13px;color:var(--text);line-height:1.5;}
@@ -513,6 +550,10 @@
 <p><b>Compounding</b> flags days where another credible damaging event (Medium+ confidence, hail ≥1″ or wind ≥50 mph) occurred within ±30 days. Useful when claim attribution may span more than one event (e.g., back-to-back storms).</p>
 
 <p><b>📡 Radar link</b> opens the <a href="https://mesonet.agron.iastate.edu/timemachine/" target="_blank" rel="noopener">Iowa Environmental Mesonet Time Machine</a> at the event date so you can visually confirm what the radar saw alongside the MESH point estimate.</p>
+
+<p><b>🔍 NEXRAD Verify (rows with MRMS MESH ≥ 1″)</b> runs a per-row deep-dive against the actual WSR-88D Level 2 archive — the same radar data NSSL uses to compute MESH, but inspected directly at the property gate with dual-polarization. The backend picks the nearest WSR-88D within 150 mi, locks onto the storm hour using a MESH_60min scan over the day, downloads ~8 Level 2 volumes inside that hour (volume cadence is ~5 min during severe weather), parses them with <a href="https://arm-doe.github.io/pyart/" target="_blank" rel="noopener">Py-ART</a>, finds the gates within ~2 km of the property at the lowest elevation tilt (0.5°), and extracts <b>Z (reflectivity)</b>, <b>ZDR (differential reflectivity)</b>, <b>CC (correlation coefficient)</b>, and <b>KDP (specific differential phase)</b> at the peak-Z gate. A rule-based classifier maps the dual-pol fingerprint to a hydrometeor verdict using thresholds adapted from Heinselman &amp; Ryzhkov (2006) and Park et al. (2009): high CC + high ZDR with high Z → heavy rain; low CC + near-zero ZDR with high Z → hail (Small / Large / Giant by reflectivity tier). The rendered radar image (lowest-elev reflectivity PPI cropped to ~30 mi around the property with the property pinned) is the same image type insurance adjusters expect in a CoreLogic-style hail verification report.</p>
+
+<p><b>Why this can disagree with MRMS MESH:</b> MESH is a reflectivity-aloft proxy — it can over-flag hail in tall heavy-rain cores. CC and ZDR are the actual hydrometeor fingerprint at the gate, so when MESH says "1″ hail" but the radar gate shows CC&gt;0.97 and ZDR&gt;1.5 dB, the dual-pol read is "heavy rain — no hail at this point." That contradiction is itself diagnostic. The Confidence pill rebuilds accordingly: HSDA "Large" or "Giant" promotes the row to <b>High</b>; HCA "Heavy Rain" on a row where MESH or IDW said ≥1″ demotes it to <b>Low</b>.</p>
 
 <p><b>POSH (Probability of Severe Hail)</b> is a separate MRMS product showing the radar-derived probability that ≥ 1″ hail is occurring at a point. It's instantaneous, not a window max, so a fixed 4-times-per-day schedule almost always reads 0% even at real hail events. The backend handles this by sampling POSH at 15-minute cadence <em>only inside the MESH peak 6-hour window</em> when MESH detected hail, then keeping the maximum. POSH ≥ 50% is the radar's own "severe hail probable" threshold and appears in red below the MESH value when reached; it also promotes the row to High confidence when MESH or IDW agree on severe hail (radar endorsement). On silent days (MESH 0 everywhere) POSH falls back to the cheap 4-sample schedule.</p>
 
@@ -1061,6 +1102,202 @@ function compositeTooltip(r){
   return lines.join('\n');
 }
 
+/* =========================================================================
+   NEXRAD verification (Phase D) — per-row "Verify with radar" button
+   that hits the backend's /api/nexrad-verify endpoint and renders the
+   forensic findings (HSDA / HCA classification, dual-pol values at the
+   property gate, peak-time radar PNG) in a modal. The verdict feeds back
+   into rebuildConfidence so a row can be promoted (radar confirms hail) or
+   demoted (radar shows heavy rain when MESH said hail).
+   ========================================================================= */
+
+function verifyButtonHtml(r){
+  // Only offer the deep-dive button on hail rows where MRMS MESH meets the
+  // ≥ 1″ severe-hail threshold. Below that the cost (15-30s analysis) isn't
+  // worth it and adjusters won't be looking for radar verification anyway.
+  if (r.type !== 'Hail' || r._meshIn == null || r._meshIn < 1.0) return '';
+  const ndata = r._nexradData;
+  if (ndata && ndata.findings && !ndata.findings.error) {
+    const cls = ndata.findings.hca_class === 'Heavy Rain' ? ' contradicts' : '';
+    return `<button class="verify-done${cls}" onclick="openNexradVerify('${escapeHtml(r.date)}')" title="Radar verification ran — click to re-open">✓ Verified</button>`;
+  }
+  return `<button class="verify-btn" onclick="openNexradVerify('${escapeHtml(r.date)}')" title="Run NEXRAD Level 2 dual-pol verification at the property gate">🔍 Verify</button>`;
+}
+
+let nexradInflight = {};   // date -> AbortController, prevents duplicate fetches
+
+async function openNexradVerify(date){
+  if (!MESH_API_URL || !state.ctx) return;
+  const row = (state.estimateRows || []).find(rw => rw.date === date && rw.type === 'Hail');
+  if (!row) return;
+
+  // If we already have a result cached on the row, just show the modal.
+  if (row._nexradData && row._nexradData.findings && !row._nexradData.findings.error) {
+    showNexradModal({ data: row._nexradData, date });
+    return;
+  }
+
+  // Otherwise: open modal in loading state, fire the fetch.
+  showNexradModal({ loading: true, date });
+
+  if (nexradInflight[date]) return;          // de-dupe rapid double-clicks
+  const ctrl = new AbortController();
+  nexradInflight[date] = ctrl;
+
+  try {
+    const url = `${MESH_API_URL}/api/nexrad-verify?lat=${state.ctx.lat}&lon=${state.ctx.lon}&date=${encodeURIComponent(date)}`;
+    const r = await fetch(url, { signal: ctrl.signal });
+    const d = await r.json();
+    row._nexradData = d;
+    showNexradModal({ data: d, date });
+    // Re-render the row so the button changes to "✓ Verified" and the
+    // confidence pill rebuilds with the radar verdict in the mix.
+    refreshRowAfterNexrad(row);
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      showNexradModal({ error: 'Failed to reach the radar verification service.', date });
+    }
+  } finally {
+    delete nexradInflight[date];
+  }
+}
+
+function closeNexradModal(){
+  const m = document.getElementById('nexrad-modal');
+  if (m) m.style.display = 'none';
+}
+
+function showNexradModal({ loading, error, data, date }){
+  let m = document.getElementById('nexrad-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'nexrad-modal';
+    m.className = 'nexrad-modal';
+    m.innerHTML = `
+      <div class="nexrad-modal-backdrop" onclick="closeNexradModal()"></div>
+      <div class="nexrad-modal-content">
+        <button class="nexrad-modal-close" onclick="closeNexradModal()" aria-label="Close">×</button>
+        <h2>Radar Verification</h2>
+        <div class="subtitle" id="nexrad-modal-subtitle"></div>
+        <div id="nexrad-modal-body"></div>
+      </div>`;
+    document.body.appendChild(m);
+    // Close on Escape
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeNexradModal();
+    });
+  }
+  m.style.display = 'flex';
+  document.getElementById('nexrad-modal-subtitle').textContent = date ? `${date} UTC` : '';
+  const body = document.getElementById('nexrad-modal-body');
+
+  if (loading) {
+    body.innerHTML = `
+      <div class="nexrad-loading">
+        <div class="spin">📡</div>
+        <div><b>Running radar verification…</b></div>
+        <div style="margin-top:6px;">Locating nearest WSR-88D, locking onto the storm hour via MESH_60min, downloading and parsing ~8 Level 2 volumes (Z, ZDR, CC, KDP) at the property gate, classifying the dual-pol signature, and rendering the radar image.</div>
+        <div style="margin-top:10px;font-size:11.5px;">Typical first-time runtime: 30-60 seconds. Subsequent re-opens are instant.</div>
+      </div>`;
+    return;
+  }
+  if (error) {
+    body.innerHTML = `<div class="nexrad-verdict neutral">${escapeHtml(error)}</div>`;
+    return;
+  }
+
+  body.innerHTML = renderNexradFindings(data);
+}
+
+function renderNexradFindings(d){
+  if (!d || !d.ok) {
+    return `<div class="nexrad-verdict neutral">${escapeHtml((d && d.message) || 'Radar verification not available.')}</div>`;
+  }
+  const f = d.findings || {};
+  if (f.error) {
+    return `<div class="nexrad-verdict neutral">${escapeHtml(f.message || f.error)}</div>`;
+  }
+  const radar = d.radar || {};
+  const verdictTone =
+    f.hsda_class === 'Large (1-2")' || f.hsda_class === 'Giant (>2")' ? 'confirms' :
+    f.hca_class === 'Heavy Rain' ? 'contradicts' : 'neutral';
+  const verdictLine =
+    verdictTone === 'confirms'
+      ? `✓ Hail confirmed at property — HSDA: ${escapeHtml(f.hsda_class)}, HCA: ${escapeHtml(f.hca_class)}`
+      : verdictTone === 'contradicts'
+      ? `⚠ Heavy-rain signature only — radar contradicts hail estimate at this gate`
+      : `Inconclusive — ${escapeHtml(f.hsda_class || 'no clear hail signature')}`;
+
+  const fmt = (v, suffix) => v == null ? '—' : `${v}${suffix || ''}`;
+  const grid = `
+    <div class="nexrad-grid">
+      <div class="cell"><div class="lbl">Z (refl.)</div><div class="val">${fmt(f.Z, ' dBZ')}</div></div>
+      <div class="cell"><div class="lbl">ZDR</div><div class="val">${fmt(f.ZDR, ' dB')}</div></div>
+      <div class="cell"><div class="lbl">CC</div><div class="val">${fmt(f.CC)}</div></div>
+      <div class="cell"><div class="lbl">KDP</div><div class="val">${fmt(f.KDP, ' °/km')}</div></div>
+      <div class="cell"><div class="lbl">HSDA Class</div><div class="val">${escapeHtml(f.hsda_class || '—')}</div></div>
+      <div class="cell"><div class="lbl">HCA Class</div><div class="val">${escapeHtml(f.hca_class || '—')}</div></div>
+    </div>`;
+
+  const img = f.image_b64
+    ? `<img class="nexrad-image" alt="Radar reflectivity at storm peak with property pin" src="data:image/${f.image_format||'png'};base64,${f.image_b64}">`
+    : '';
+
+  const meta = `
+    <div class="nexrad-meta">
+      Radar: <b>${escapeHtml(radar.id || '?')}</b> (${escapeHtml(radar.name || '')}, ${radar.distance_mi} mi)
+      · Beam height at property: ${radar.beam_height_ft_at_property} ft AGL
+      · Peak volume: <b>${escapeHtml(f.peak_volume_utc || '?')}</b> UTC at ${f.sweep_elev_deg}° tilt
+      · Storm hour locked: <b>${escapeHtml(d.storm_hour_locked || 'n/a')}</b> UTC
+      · Volumes analyzed: ${f.volumes_analyzed} of ${d.volumes_in_window} in window
+    </div>`;
+
+  return `
+    <div class="nexrad-verdict ${verdictTone}">${verdictLine}</div>
+    ${grid}
+    <div class="nexrad-narrative">${escapeHtml(f.narrative || '')}</div>
+    ${img}
+    ${meta}
+  `;
+}
+
+function refreshRowAfterNexrad(row){
+  // Re-run confidence rebuild with the new NEXRAD verdict, then update the
+  // row's verify button + confidence pill in place. Avoids a full table
+  // re-render so any open modal/scroll/sort state is preserved.
+  row.confidence = rebuildConfidence(row);
+  const claimDate = state.ctx ? state.ctx.claimDate : null;
+  const claimWindow = state.ctx ? state.ctx.claimWindow : 7;
+  row.causationScore = causationScore(row, claimDate, claimWindow);
+
+  const tbl = document.getElementById('estimates-table');
+  if (!tbl) return;
+  for (const tr of tbl.querySelectorAll('tbody tr')) {
+    const dateCell = tr.children[0]?.textContent?.trim();
+    const typeCell = tr.children[1]?.textContent?.trim();
+    if (dateCell !== row.date || typeCell !== row.type) continue;
+    // Last cell (Radar column) — replace just the verify button portion
+    const lastTd = tr.children[tr.children.length - 1];
+    if (lastTd) {
+      // Keep the IEM link, swap the post-link button HTML
+      const link = lastTd.querySelector('.radar-link');
+      lastTd.innerHTML = (link ? link.outerHTML : '') + verifyButtonHtml(row);
+    }
+    // Update confidence pill
+    const conf = tr.querySelector('.conf');
+    if (conf) {
+      conf.className = `conf conf-${row.confidence.replace(' ','')}`;
+      conf.textContent = row.confidence;
+    }
+    const score = tr.querySelector('.score-pill');
+    if (score) {
+      score.textContent = row.causationScore;
+      score.style.background = scoreColor(row.causationScore);
+    }
+    break;
+  }
+}
+
 /* Compute the composite estimate from whatever signals are available on a
    row at the moment of render. v1 covers IDW + MRMS MESH; Phase C will add
    NWS warning polygon size and CoCoRaHS gauge. Wind rows currently have
@@ -1077,11 +1314,12 @@ function computeComposite(r){
   return { value: avg, signals };
 }
 
-/* Recompute confidence using signal agreement (not just IDW geometry) and
-   POSH endorsement. POSH ≥ 50% is the radar's own "severe hail probable"
-   threshold — when a strong POSH lines up with a positive MESH/IDW reading,
-   that's independent corroboration that severe hail occurred at the point.
-   Wind rows fall back to the IDW geometry confidence (no MRMS wind product). */
+/* Recompute confidence using signal agreement, POSH endorsement, and the
+   NEXRAD dual-pol verdict when available. The radar verdict is the strongest
+   single signal: HSDA "Large" or "Giant" promotes a row to High because the
+   radar's hydrometeor classifier directly observed hail at the property gate.
+   HCA "Heavy Rain" demotes when MRMS or IDW estimated hail — that's a direct
+   contradiction worth flagging. Wind rows fall back to IDW-geometry only. */
 function rebuildConfidence(r){
   const baseConf = r.confidence;             // IDW-geometry confidence
   if (r.type !== 'Hail') return baseConf;
@@ -1090,6 +1328,18 @@ function rebuildConfidence(r){
   const mesh = r._meshIn;
   const posh = r._poshPct;
   const strongPosh = posh != null && posh >= 50;
+
+  // NEXRAD dual-pol verdict — strongest signal when present
+  const nexHsda = r._nexradData && r._nexradData.findings && r._nexradData.findings.hsda_class;
+  const nexHca  = r._nexradData && r._nexradData.findings && r._nexradData.findings.hca_class;
+  const radarHail = nexHsda === 'Large (1-2")' || nexHsda === 'Giant (>2")';
+  const radarHeavyRainOnly = nexHca === 'Heavy Rain' && (nexHsda === 'None' || !nexHsda);
+
+  // 1. Radar dual-pol confirmed hail at the gate → High, no caveats
+  if (radarHail) return 'High';
+  // 2. Radar said heavy rain only AND another signal said ≥1″ hail
+  //    → strong contradiction, demote to Low
+  if (radarHeavyRainOnly && (idw >= 1.0 || (mesh != null && mesh >= 1.0))) return 'Low';
 
   // No MESH data yet — POSH alone (when strong) can still bump Medium → High
   if (mesh == null) {
@@ -1139,6 +1389,7 @@ function renderEstimates(){
         r._poshPeakWindow = p._poshPeakWindow;
         r._poshPeakTs = p._poshPeakTs;
         r._poshScanCount = p._poshScanCount;
+        r._nexradData = p._nexradData;     // preserve "✓ Verified" state across re-sorts
       }
     }
   }
@@ -1210,7 +1461,7 @@ function renderEstimates(){
               <td><span class="score-pill" style="background:${scoreColor(r.causationScore)};">${r.causationScore}</span></td>
               <td><span class="conf conf-${r.confidence.replace(' ','')}">${r.confidence}</span></td>
               <td>${r.compounding ? '<span class="compound-pill">⚠ Yes</span>' : '<span style="color:var(--muted);font-size:11px">No</span>'}</td>
-              <td><a class="radar-link" href="${radarLink(r.date)}" target="_blank" rel="noopener" title="Open IEM radar archive for ${escapeHtml(r.date)}">📡</a></td>
+              <td><a class="radar-link" href="${radarLink(r.date)}" target="_blank" rel="noopener" title="Open IEM radar archive for ${escapeHtml(r.date)}">📡</a>${verifyButtonHtml(r)}</td>
             </tr>
           `).join('')}
         </tbody>
