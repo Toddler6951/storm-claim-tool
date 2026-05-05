@@ -150,6 +150,22 @@
   .conf-Inconclusive{background:#7f8c8d;color:#fff;font-style:italic;}
   .score-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:700;font-size:11px;color:#fff;min-width:30px;text-align:center;}
   .compound-pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600;background:#fff5e6;color:#b35900;border:1px solid #ffd99c;}
+  /* Per-signal cells in the Estimates table — hover reveals the diagnostics
+     that previously occupied their own columns. The dotted underline cues
+     the user that a tooltip is available. */
+  .signal-cell{cursor:help;border-bottom:1px dotted var(--muted);}
+  .signal-cell.muted{color:var(--muted);font-size:11px;border-bottom:none;cursor:default;}
+  .composite-cell{font-weight:700;}
+  .composite-cell .sig-count{font-weight:400;font-size:10.5px;color:var(--muted);margin-left:3px;}
+  .composite-cell.composite-2plus{color:var(--primary);}
+  .signal-loading{color:var(--muted);font-size:11px;font-style:italic;}
+  /* Contractor leads CTA — sober inline card, FTC-compliant disclosure */
+  .contractor-cta{margin-top:18px;padding:14px 16px;border:1px solid var(--border);border-left:3px solid var(--accent);background:#fbfaf6;border-radius:6px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;}
+  .contractor-cta .body{flex:1 1 320px;font-size:13px;color:var(--text);line-height:1.5;}
+  .contractor-cta .body b{color:var(--primary);}
+  .contractor-cta .cta-btn{display:inline-block;padding:9px 16px;border-radius:5px;background:var(--primary);color:#fff;font-weight:600;font-size:13px;text-decoration:none;white-space:nowrap;}
+  .contractor-cta .cta-btn:hover{background:var(--primary-light);}
+  .contractor-cta .disclosure{flex-basis:100%;font-size:10.5px;color:var(--muted);margin-top:2px;letter-spacing:.02em;text-transform:uppercase;}
   .radar-link{color:var(--primary);text-decoration:none;font-size:14px;padding:2px 6px;border-radius:4px;}
   .radar-link:hover{background:#eef3f8;}
   .capturing .actions{display:none !important;}
@@ -478,6 +494,9 @@
 </ol>
 <p><b>v2 signals exposed in the table:</b></p><ul><li><b>Surrounded?</b> — looks at the report bearings around the property and finds the largest "shadow zone". Max-gap &lt; 180° = property interpolated inside the cluster (more reliable). Max-gap &gt; 180° = property on the edge — the storm probably passed by, not over. Strong negative signal for confidence.</li><li><b>Track R²</b> — how well a straight line fits the (lat, lon) ~ time path of reports. R² &lt; 0.5 means the reports don't form a coherent storm track and inferred direction/path-proximity are not used in scoring.</li><li><b>Inconclusive</b> — explicit confidence tier when too many signals are weak or conflicting; algorithm refuses to commit to "Low" when the spatial pattern is genuinely sparse.</li></ul><p><b>Causation score (0–100)</b> ranks each candidate event by likelihood it caused / contributed to damage. Combines severity (normalized within type), confidence tier, whether reports surrounded the property, and proximity to the claim date when set. Events <em>after</em> the claim date are penalized. The Estimates table sorts by score descending by default, so the strongest candidate is the top row.</p><p><b>Compounding</b> flags days where another credible damaging event (Medium+ confidence, hail ≥1″ or wind ≥50 mph) occurred within ±30 days. Useful when claim attribution may span more than one event (e.g., back-to-back storms).</p><p><b>MESH column (Estimates tab)</b> shows the MRMS Maximum Estimated Size of Hail at the property, derived from radar reflectivity. This is independent of spotter reports — when MESH and the IDW estimate agree, that's strong corroboration; when they disagree (e.g., IDW says 2″ but MESH says 0.5″), the spotter reports may have been overestimated or the storm passed slightly off the property. MRMS data is from <a href="https://www.nssl.noaa.gov/projects/mrms/" target="_blank" rel="noopener">NOAA NSSL MRMS</a> (radar-derived, 1km grid, 24h running max). Archive begins ~2014, CONUS only.</p><p><b>📡 Radar link</b> opens the <a href="https://mesonet.agron.iastate.edu/timemachine/" target="_blank" rel="noopener">Iowa Environmental Mesonet Time Machine</a> archive at the event date — useful for visually confirming what the radar saw at that location and time alongside the MESH point estimate.</p><p>Limitations: storm direction is inferred from the report sequence — actual wind/radar (HRRR/RAP forecasts, NEXRAD MESH) are not yet pulled programmatically. UTC day grouping can split a single storm across two rows when it crosses midnight UTC. For per-point hail ground truth, the gold standard is NEXRAD MRMS MESH; until automated, use the radar link per row to verify manually.</p>
 
+<h3>Sponsored content disclosure</h3>
+<p>When the Estimates tab surfaces a credible damaging event (≥1″ hail or ≥58 mph wind, with confidence Low/Medium/High — never on Inconclusive rows), a sponsored link to a contractor-leads marketplace may appear below the table. PropertyWX may earn a commission if you connect through that link. The link's appearance does not change any analysis above it — the same rows, scores, and confidence tiers display whether or not the affiliate program is enabled. The Inconclusive tier is intentionally excluded from sponsored links so we don't monetize uncertainty.</p>
+
 <h3>Output formats</h3>
           <ul>
             <li><b>Dashboard:</b> KPIs and charts across the full result set.</li>
@@ -559,6 +578,30 @@ const SED_BASE_URL = (() => {
    Returns radar-derived hail size at a point/date — used to corroborate
    the spotter-report-based IDW estimate. Empty string disables MESH UI. */
 const MESH_API_URL = "https://mesh.propertywx.com";
+
+/* ===== Networx contractor-leads affiliate integration =====
+   Set NETWORX_REF_ID to your affiliate publisher ID. Empty string disables
+   the contractor CTA entirely (no card rendered, no link, no disclosure).
+   The CTA only appears in the Estimates tab when at least one row meets
+   "credible damaging event" criteria — never on Inconclusive rows.
+   If your affiliate network gives you a different URL pattern (Impact / CJ /
+   direct), edit buildContractorLink() below to match. */
+const NETWORX_REF_ID = "";  // e.g. "abc123" from your Networx affiliate dashboard
+
+function buildContractorLink(service, zip) {
+  // Default Networx pattern. Adjust if your affiliate dashboard shows a
+  // different format (e.g., aff_id, sub_id, deeplink path).
+  const base = "https://www.networx.com";
+  const path = service && zip ? `/services/${encodeURIComponent(service)}/${encodeURIComponent(zip)}` : "";
+  const params = NETWORX_REF_ID ? `?ref=${encodeURIComponent(NETWORX_REF_ID)}` : "";
+  return base + path + params;
+}
+
+function extractZip(addr) {
+  if (!addr) return "";
+  const m = String(addr).match(/\b(\d{5})(?:-\d{4})?\b/);
+  return m ? m[1] : "";
+}
 
 const STATE_TO_ABBR = {
   "ALABAMA":"AL","ALASKA":"AK","ARIZONA":"AZ","ARKANSAS":"AR","CALIFORNIA":"CA",
@@ -941,6 +984,92 @@ function buildEstimates(){
 
 let estSortField = 'causationScore';
 let estSortAsc = false;
+
+/* Tooltip text for the IDW signal cell. The diagnostic columns that used to
+   occupy the table (Reports, Closest, Radius, Surrounded, Storm dir, Path
+   prox., Track R²) are now consolidated here so the table can show one row
+   per source plus a composite. */
+function idwTooltip(r){
+  const lines = [];
+  lines.push(`Inverse-Distance-Weighted from ${r.n} ${r.type.toLowerCase()} report${r.n>1?'s':''}`);
+  lines.push(`Closest report: ${r.closestDist.toFixed(2)} mi`);
+  lines.push(`Search radius used: ${r.radiusUsed} mi`);
+  lines.push(`Surrounded: ${r.surrounded ? 'Yes' : 'No'} (max gap ${Math.round(r.maxGap)}°)`);
+  if (r.direction) lines.push(`Storm direction: ${r.direction}`);
+  if (r.pathProximity != null) {
+    lines.push(`Path proximity: ${r.pathProximity.toFixed(2)} mi`);
+    lines.push(`Track R²: ${r.pathR2 != null ? r.pathR2.toFixed(2) : '—'}`);
+  }
+  return lines.join('\n');
+}
+function meshTooltip(r){
+  const lines = [];
+  lines.push(`MRMS MESH — Maximum Estimated Size of Hail (radar-derived)`);
+  if (r._meshIn != null) lines.push(`24h max: ${r._meshIn.toFixed(2)}″`);
+  if (r._meshPeakIn != null) lines.push(`Peak (6h window): ${r._meshPeakIn.toFixed(2)}″ in ${r._meshPeakWindow || '?'} UTC`);
+  if (r._poshPct != null) lines.push(`POSH (peak): ${r._poshPct}% in ${r._poshPeakWindow || '?'} UTC`);
+  if (r._meshSource) lines.push(`Source: ${r._meshSource}`);
+  return lines.join('\n');
+}
+function compositeTooltip(r){
+  const lines = [];
+  if (!r._signals || !r._signals.length) return 'No signals available';
+  lines.push(`Composite from ${r._signals.length} source${r._signals.length>1?'s':''}:`);
+  for (const s of r._signals) {
+    const v = r.type === 'Hail' ? `${s.value.toFixed(2)}″` : `${Math.round(s.value)} mph`;
+    lines.push(`  • ${s.name}: ${v}`);
+  }
+  if (r._signals.length === 1) {
+    lines.push(`Single-signal estimate — confidence depends on that source alone.`);
+  } else {
+    lines.push(`Multi-signal agreement strengthens the estimate.`);
+  }
+  return lines.join('\n');
+}
+
+/* Compute the composite estimate from whatever signals are available on a
+   row at the moment of render. v1 covers IDW + MRMS MESH; Phase C will add
+   NWS warning polygon size and CoCoRaHS gauge. Wind rows currently have
+   IDW only — that's expected; MRMS doesn't have a wind product equivalent. */
+function computeComposite(r){
+  const signals = [];
+  if (r.value != null) signals.push({ name: 'IDW', value: r.value });
+  if (r.type === 'Hail' && r._meshIn != null) {
+    signals.push({ name: 'MESH 24h', value: r._meshIn });
+  }
+  // (Phase C) NWS warning polygon size, CoCoRaHS gauge, etc.
+  if (!signals.length) return { value: null, signals: [] };
+  const avg = signals.reduce((s, x) => s + x.value, 0) / signals.length;
+  return { value: avg, signals };
+}
+
+/* Recompute confidence using signal agreement, not just IDW geometry. The
+   point of having multiple sources is that two corroborating signals are
+   more trustworthy than one — and disagreement is itself diagnostic. Wind
+   rows fall back to the IDW geometry confidence (no second signal yet). */
+function rebuildConfidence(r){
+  const baseConf = r.confidence;             // IDW-geometry confidence
+  if (r.type !== 'Hail') return baseConf;
+  if (r._meshIn == null) return baseConf;    // MESH not loaded / not in coverage
+
+  const idw  = r.value;
+  const mesh = r._meshIn;
+  const max = Math.max(idw, mesh);
+  const min = Math.min(idw, mesh);
+  // "Agree" means both small (<0.25) or within ~50% of each other.
+  const agree = (max < 0.25) || (max > 0 && (min / max) >= 0.5);
+
+  if (max < 0.25) return 'Inconclusive';     // both signals say no hail
+  if (min >= 1.0 && agree) return 'High';    // both ≥1″ and consistent
+  if (min >= 0.25 && agree) return 'Medium'; // both above noise floor and consistent
+  if (!agree && max >= 1.0) return 'Low';    // one severe, one zero — magnitude unclear
+  return baseConf;
+}
+
+function fmtSignal(value, type){
+  return type === 'Hail' ? `${value.toFixed(2)}″` : `${Math.round(value)} mph`;
+}
+
 function renderEstimates(){
   const container = document.getElementById('estimates-content');
   if (!state.ctx) {
@@ -948,6 +1077,36 @@ function renderEstimates(){
     return;
   }
   const rows = buildEstimates();
+
+  // Carry forward any MESH values already loaded from a previous render
+  // (e.g. user re-sorted the table). This avoids re-fetching identical data.
+  if (state.estimateRows && state.estimateRows.length) {
+    const prev = new Map(state.estimateRows.map(r => [r.date+'|'+r.type, r]));
+    for (const r of rows) {
+      const p = prev.get(r.date+'|'+r.type);
+      if (p) {
+        r._meshIn = p._meshIn;
+        r._meshPeakIn = p._meshPeakIn;
+        r._meshPeakWindow = p._meshPeakWindow;
+        r._meshSource = p._meshSource;
+        r._poshPct = p._poshPct;
+        r._poshPeakWindow = p._poshPeakWindow;
+      }
+    }
+  }
+
+  // Materialize composite + signal-aware confidence on each row before sort.
+  for (const r of rows) {
+    const c = computeComposite(r);
+    r._composite = c.value;
+    r._signals = c.signals;
+    r.confidence = rebuildConfidence(r);
+    // Recompute causation score against the rebuilt confidence
+    const claimDate = state.ctx ? state.ctx.claimDate : null;
+    const claimWindow = state.ctx ? state.ctx.claimWindow : 7;
+    r.causationScore = causationScore(r, claimDate, claimWindow);
+  }
+
   rows.sort((a, b) => {
     let av = a[estSortField], bv = b[estSortField];
     if (av == null) av = ''; if (bv == null) bv = '';
@@ -957,28 +1116,35 @@ function renderEstimates(){
   });
   if (!rows.length) {
     container.innerHTML = '<div class="empty"><div>No qualifying days.</div><div class="hint" style="margin-top:6px;">An estimate is emitted for a day only if at least one hail or wind report (with magnitude) was within 5 mi of the property.</div></div>';
+    state.estimateRows = [];
     return;
   }
-  const fmtVal = (r) => r.type === 'Hail'
-    ? `<b>${r.value.toFixed(2)}"</b>`
-    : `<b>${Math.round(r.value)} mph</b>`;
+
+  const fmtIDW = (r) => `<span class="signal-cell" title="${escapeHtml(idwTooltip(r))}"><b>${fmtSignal(r.value, r.type)}</b></span>`;
+  const fmtMESH = (r) => {
+    if (r.type !== 'Hail') return '<span class="signal-cell muted">—</span>';
+    if (r._meshIn == null)  return '<span class="signal-loading mesh-cell-inner">…</span>';
+    return `<span class="signal-cell" title="${escapeHtml(meshTooltip(r))}"><b>${r._meshIn.toFixed(2)}″</b></span>`;
+  };
+  const fmtComposite = (r) => {
+    if (r._composite == null) return '<span class="muted">—</span>';
+    const sigCount = r._signals.length;
+    const cls = sigCount >= 2 ? 'composite-2plus' : '';
+    const main = fmtSignal(r._composite, r.type);
+    return `<span class="signal-cell ${cls}" title="${escapeHtml(compositeTooltip(r))}">${main}<span class="sig-count">(${sigCount} src)</span></span>`;
+  };
+
   container.innerHTML = `
     <div class="table-wrap">
       <table class="results" id="estimates-table">
         <thead><tr>
           <th data-est-sort="date">Date (UTC)<span class="arrow">↕</span></th>
           <th data-est-sort="type">Type<span class="arrow">↕</span></th>
-          <th data-est-sort="value">Estimate<span class="arrow">↕</span></th>
-          <th title="MRMS MESH (Maximum Estimated Size of Hail) at the property — radar-derived. Asynchronously loaded from the MESH service.">MESH<span class="arrow">↕</span></th>
-          <th data-est-sort="n">Reports<span class="arrow">↕</span></th>
-          <th data-est-sort="closestDist">Closest<span class="arrow">↕</span></th>
-          <th data-est-sort="radiusUsed">Radius<span class="arrow">↕</span></th>
-          <th data-est-sort="maxGap" title="Are reports distributed around the property (Yes = interpolation) or all on one side (No = extrapolation, less reliable)?">Surrounded?<span class="arrow">↕</span></th>
-          <th data-est-sort="direction">Storm dir<span class="arrow">↕</span></th>
-          <th data-est-sort="pathProximity" title="Distance from property to the inferred storm track">Path prox.<span class="arrow">↕</span></th>
-          <th data-est-sort="pathR2" title="R² of the linear (lat,lon)~time fit. Higher = more coherent storm track.">Track R²<span class="arrow">↕</span></th>
-          <th data-est-sort="causationScore" title="0–100 ranking of how likely this storm caused damage.">Score<span class="arrow">↕</span></th>
-          <th data-est-sort="confidence">Confidence<span class="arrow">↕</span></th>
+          <th data-est-sort="value" title="Inverse-Distance-Weighted estimate from local LSR/SED reports. Hover the value for diagnostics: report count, closest distance, search radius, angular coverage, storm direction, path proximity, track R².">IDW<span class="arrow">↕</span></th>
+          <th data-est-sort="_meshIn" title="MRMS MESH (Maximum Estimated Size of Hail) — radar-derived 24-hour maximum at the property grid cell. Hover for peak 6-hour window and POSH probability.">MRMS MESH<span class="arrow">↕</span></th>
+          <th data-est-sort="_composite" title="Composite estimate combining all available signals. Multi-source agreement strengthens the result.">Composite<span class="arrow">↕</span></th>
+          <th data-est-sort="causationScore" title="0–100 ranking of how likely this storm caused damage at the property.">Score<span class="arrow">↕</span></th>
+          <th data-est-sort="confidence" title="High = multiple signals agree on damaging hail. Medium = signals exist but agree only loosely. Low = signals disagree or marginal. Inconclusive = no signal.">Confidence<span class="arrow">↕</span></th>
           <th data-est-sort="compounding" title="Yes if another credible damaging event occurred within ±30 days.">Compounding<span class="arrow">↕</span></th>
           <th>Radar</th>
         </tr></thead>
@@ -987,15 +1153,9 @@ function renderEstimates(){
             <tr>
               <td>${escapeHtml(r.date)}</td>
               <td>${escapeHtml(r.type)}</td>
-              <td>${fmtVal(r)}</td>
-              <td class="mesh-cell" data-date="${escapeHtml(r.date)}" data-type="${escapeHtml(r.type)}"><span style="color:var(--muted);font-size:11px;">—</span></td>
-              <td>${r.n}</td>
-              <td>${r.closestDist.toFixed(2)} mi</td>
-              <td>${r.radiusUsed} mi</td>
-              <td>${r.surrounded ? '<b style="color:#27ae60">Yes</b>' : '<b style="color:#c0392b">No</b>'} <small style="color:var(--muted)">(${Math.round(r.maxGap)}°)</small></td>
-              <td>${r.direction ? '<b>'+escapeHtml(r.direction)+'</b>' : '—'}</td>
-              <td>${r.pathProximity != null ? r.pathProximity.toFixed(2) + ' mi' : '—'}</td>
-              <td>${r.pathR2 != null ? r.pathR2.toFixed(2) : '—'}</td>
+              <td>${fmtIDW(r)}</td>
+              <td class="mesh-cell" data-date="${escapeHtml(r.date)}" data-type="${escapeHtml(r.type)}">${fmtMESH(r)}</td>
+              <td class="composite-cell">${fmtComposite(r)}</td>
               <td><span class="score-pill" style="background:${scoreColor(r.causationScore)};">${r.causationScore}</span></td>
               <td><span class="conf conf-${r.confidence.replace(' ','')}">${r.confidence}</span></td>
               <td>${r.compounding ? '<span class="compound-pill">⚠ Yes</span>' : '<span style="color:var(--muted);font-size:11px">No</span>'}</td>
@@ -1007,15 +1167,72 @@ function renderEstimates(){
     </div>
   `;
   bindEstimatesSorting();
+  state.estimateRows = rows;          // expose for CTA + async MESH update
+  renderContractorCTA();              // pre-MESH render (IDW-only signal)
   loadMESHForEstimates();
 }
 
+/* Damaging-event thresholds for surfacing the contractor CTA. We deliberately
+   exclude "Inconclusive" rows — the whole point of that confidence tier is
+   that we don't trust the signal enough to act on it. */
+function isDamagingForCTA(r) {
+  if (!r || r.confidence === 'Inconclusive') return false;
+  if (r.type === 'Hail') {
+    if (r.value >= 1.0) return true;             // IDW says ≥1″ hail
+    if (r._meshIn != null && r._meshIn >= 1.0) return true;  // radar says ≥1″
+    return false;
+  }
+  if (r.type === 'Wind') {
+    return r.value >= 58;                        // NWS severe-wind threshold
+  }
+  return false;
+}
 
-/* MESH loader. For each row in the Estimates table where the type is Hail and
-   date >= 2014-01-01, asynchronously fetch the radar-derived MESH value from
-   the backend and populate the cell. Concurrent fetches are limited to 4 to
-   avoid hammering the backend. Failures (no data, out-of-coverage, network)
-   are silent — cell stays "—". */
+function renderContractorCTA() {
+  const container = document.getElementById('estimates-content');
+  if (!container) return;
+  // Always remove any prior card before deciding whether to render again
+  const prior = document.getElementById('contractor-cta');
+  if (prior) prior.remove();
+  if (!NETWORX_REF_ID) return;                   // disabled until ID is set
+  const rows = state.estimateRows || [];
+  const damaging = rows.filter(isDamagingForCTA);
+  if (!damaging.length) return;
+
+  // Pick the strongest candidate — rows are pre-sorted by causation score desc
+  // by default, but user may have re-sorted; sort a copy for the CTA pick.
+  const top = [...damaging].sort((a, b) => (b.causationScore||0) - (a.causationScore||0))[0];
+  const service = "roofing";                     // hail + wind both → roofing leads
+  const zip = extractZip(state.ctx && state.ctx.matchedAddress);
+  const url = buildContractorLink(service, zip);
+
+  const sizeText = top.type === 'Hail'
+    ? `up to <b>${top.value.toFixed(2)}″ hail</b>`
+    : `gusts of <b>${Math.round(top.value)} mph</b>`;
+  const meshNote = (top.type === 'Hail' && top._meshIn != null)
+    ? ` Radar (MESH) confirmed ${top._meshIn.toFixed(2)}″.`
+    : '';
+
+  const card = document.createElement('div');
+  card.id = 'contractor-cta';
+  card.className = 'contractor-cta';
+  card.innerHTML = `
+    <div class="body">
+      Damage from this storm? The <b>${escapeHtml(top.date)}</b> event near your property registered ${sizeText} —
+      typical insurance-claim territory for roofing damage.${meshNote}
+    </div>
+    <a class="cta-btn" href="${escapeHtml(url)}" target="_blank" rel="sponsored noopener nofollow">Get free contractor quotes →</a>
+    <div class="disclosure">Sponsored · PropertyWX may earn a commission</div>
+  `;
+  container.appendChild(card);
+}
+
+
+/* MESH loader. For each Hail row, fetch the multi-signal forensic record
+   (24h MESH max + peak 6-hour window + POSH peak) from the backend. As each
+   row's data arrives, we update its MESH cell, the composite cell, and the
+   confidence pill in place — which lets a row be promoted from Medium → High
+   when MRMS confirms the IDW estimate. Concurrency capped at 4. */
 async function loadMESHForEstimates(){
   if (!MESH_API_URL || !state.ctx) return;
   const cells = Array.from(document.querySelectorAll('.mesh-cell'));
@@ -1024,10 +1241,56 @@ async function loadMESHForEstimates(){
   const lon = state.ctx.lon;
   const cutoff = '2014-01-01';
 
-  // Hail-only & date-eligible cells
-  const queue = cells.filter(c => c.dataset.type === 'Hail' && c.dataset.date >= cutoff);
-  // Show a subtle "loading" hint
-  for (const c of queue) c.innerHTML = '<span style="color:var(--muted);font-size:11px;font-style:italic;">…</span>';
+  function findRow(date){
+    return (state.estimateRows || []).find(rw => rw.date === date && rw.type === 'Hail');
+  }
+  // Only queue cells whose row hasn't been loaded yet (undefined). Rows
+  // carried forward from a prior render keep their value/null and skip the fetch.
+  const queue = cells.filter(c => {
+    if (c.dataset.type !== 'Hail' || c.dataset.date < cutoff) return false;
+    const row = findRow(c.dataset.date);
+    return row && row._meshIn === undefined;
+  });
+  for (const c of queue) c.innerHTML = '<span class="signal-loading">…</span>';
+  function refreshRowDom(cell, row){
+    // MESH cell
+    if (row._meshIn == null) {
+      cell.innerHTML = '<span class="signal-cell muted">—</span>';
+      cell.title = row._meshNote || 'No MESH data for this date/location.';
+    } else {
+      cell.innerHTML = `<span class="signal-cell" title="${escapeHtml(meshTooltip(row))}"><b>${row._meshIn.toFixed(2)}″</b></span>`;
+    }
+    // Composite cell + confidence pill — siblings inside the same row
+    const tr = cell.closest('tr');
+    if (!tr) return;
+    const c = computeComposite(row);
+    row._composite = c.value; row._signals = c.signals;
+    row.confidence = rebuildConfidence(row);
+    const claimDate = state.ctx ? state.ctx.claimDate : null;
+    const claimWindow = state.ctx ? state.ctx.claimWindow : 7;
+    row.causationScore = causationScore(row, claimDate, claimWindow);
+
+    const compTd = tr.querySelector('.composite-cell');
+    if (compTd) {
+      if (row._composite == null) {
+        compTd.innerHTML = '<span class="muted">—</span>';
+      } else {
+        const cls = row._signals.length >= 2 ? 'composite-2plus' : '';
+        const main = fmtSignal(row._composite, row.type);
+        compTd.innerHTML = `<span class="signal-cell ${cls}" title="${escapeHtml(compositeTooltip(row))}">${main}<span class="sig-count">(${row._signals.length} src)</span></span>`;
+      }
+    }
+    const confSpan = tr.querySelector('.conf');
+    if (confSpan) {
+      confSpan.className = `conf conf-${row.confidence.replace(' ','')}`;
+      confSpan.textContent = row.confidence;
+    }
+    const scorePill = tr.querySelector('.score-pill');
+    if (scorePill) {
+      scorePill.textContent = row.causationScore;
+      scorePill.style.background = scoreColor(row.causationScore);
+    }
+  }
 
   const concurrency = 4;
   let i = 0;
@@ -1035,25 +1298,36 @@ async function loadMESHForEstimates(){
     while (i < queue.length) {
       const cell = queue[i++];
       const date = cell.dataset.date;
+      const row = findRow(date);
+      if (!row) continue;
       try {
-        const url = `${MESH_API_URL}/api/mesh?lat=${lat}&lon=${lon}&date=${date}`;
+        const url = `${MESH_API_URL}/api/event-detail?lat=${lat}&lon=${lon}&date=${date}`;
         const r = await fetch(url);
         if (!r.ok) throw 0;
         const d = await r.json();
-        if (d.mesh_in != null) {
-          cell.innerHTML = `<b>${d.mesh_in.toFixed(2)}″</b>`;
-          cell.title = `MRMS MESH from ${d.source}`;
-        } else {
-          cell.innerHTML = '<span style="color:var(--muted);font-size:11px;">—</span>';
-          cell.title = d.note || 'No MESH data for this date/location.';
+        // mesh.max_in may be 0.0 (real "no detection") or null (no data) — preserve the distinction
+        if (d && d.mesh) {
+          row._meshIn         = d.mesh.max_in;
+          row._meshPeakIn     = d.mesh.peak_in;
+          row._meshPeakWindow = d.mesh.peak_window_utc;
+          row._meshSource     = d.mesh.source;
         }
+        if (d && d.posh) {
+          row._poshPct         = d.posh.max_pct;
+          row._poshPeakWindow  = d.posh.peak_window_utc;
+        }
+        if (d && d.note) row._meshNote = d.note;
       } catch {
-        cell.innerHTML = '<span style="color:var(--muted);font-size:11px;">—</span>';
-        cell.title = 'MESH service unreachable.';
+        // Mark as loaded-but-empty so we don't refetch on every sort/re-render
+        row._meshIn = row._meshIn ?? null;
+        row._meshNote = 'MESH service unreachable.';
       }
+      refreshRowDom(cell, row);
     }
   }
   await Promise.all(Array.from({length: concurrency}, worker));
+  // Refresh the contractor CTA now that radar may have promoted a row.
+  renderContractorCTA();
 }
 
 function bindEstimatesSorting(){
@@ -2130,17 +2404,42 @@ function exportExcel(){
   ws2['!cols'] = headers.map(h => ({ wch: Math.max(10, h.length + 2) }));
   XLSX.utils.book_append_sheet(wb, ws2, 'Combined');
 
-  // Estimates sheet
-  const ests = (typeof buildEstimates === 'function') ? buildEstimates() : [];
+  // Estimates sheet — mirrors the on-screen table (multi-source layout)
+  // Pulls from state.estimateRows so the export carries the live MESH/composite/
+  // signal-aware-confidence values rather than re-running buildEstimates fresh.
+  const ests = (state.estimateRows && state.estimateRows.length)
+    ? state.estimateRows
+    : ((typeof buildEstimates === 'function') ? buildEstimates() : []);
   if (ests.length) {
-    const eHeaders = ['Date (UTC)','Type','Estimate','Reports used','Closest (mi)','Radius (mi)','Storm direction','Path proximity (mi)','Confidence'];
-    const eRows = ests.map(r => [
-      r.date, r.type,
-      r.type === 'Hail' ? +r.value.toFixed(2) : Math.round(r.value),
-      r.n, +r.closestDist.toFixed(2), r.radiusUsed,
-      r.direction || '', r.pathProximity != null ? +r.pathProximity.toFixed(2) : '',
-      r.confidence,
-    ]);
+    const eHeaders = [
+      'Date (UTC)','Type',
+      'IDW estimate','MRMS MESH 24h (in)','MESH peak 6h (in)','MESH peak window UTC',
+      'Composite','Sources used',
+      'Score','Confidence','Compounding',
+      // IDW diagnostics (kept in export so analysts have the audit trail)
+      'Reports used','Closest (mi)','Radius (mi)','Surrounded','Storm direction','Path proximity (mi)','Track R²',
+    ];
+    const eRows = ests.map(r => {
+      const idwOut = r.type === 'Hail' ? +r.value.toFixed(2) : Math.round(r.value);
+      const meshOut = (r.type === 'Hail' && r._meshIn != null) ? +r._meshIn.toFixed(2) : '';
+      const meshPeakOut = (r.type === 'Hail' && r._meshPeakIn != null) ? +r._meshPeakIn.toFixed(2) : '';
+      const compOut = r._composite != null
+        ? (r.type === 'Hail' ? +r._composite.toFixed(2) : Math.round(r._composite))
+        : '';
+      const srcs = (r._signals || []).map(s => s.name).join(' + ');
+      return [
+        r.date, r.type,
+        idwOut, meshOut, meshPeakOut, r._meshPeakWindow || '',
+        compOut, srcs,
+        r.causationScore != null ? r.causationScore : '',
+        r.confidence, r.compounding ? 'Yes' : 'No',
+        r.n, +r.closestDist.toFixed(2), r.radiusUsed,
+        r.surrounded ? 'Yes' : 'No',
+        r.direction || '',
+        r.pathProximity != null ? +r.pathProximity.toFixed(2) : '',
+        r.pathR2 != null ? +r.pathR2.toFixed(2) : '',
+      ];
+    });
     const wsE = XLSX.utils.aoa_to_sheet([eHeaders, ...eRows]);
     wsE['!cols'] = eHeaders.map(h => ({ wch: Math.max(10, h.length + 2) }));
     XLSX.utils.book_append_sheet(wb, wsE, 'Estimates');
