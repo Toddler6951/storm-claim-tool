@@ -147,9 +147,9 @@
     "states_count": 55
   },
   "2017": {
-    "creation": "20260323",
-    "fetched_at": "2026-04-28T04:04:11.116939Z",
-    "filename": "StormEvents_details-ftp_v1.0_d2017_c20260323.csv.gz",
+    "creation": "20260519",
+    "fetched_at": "2026-06-01T11:25:05.504195Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2017_c20260519.csv.gz",
     "row_total": 54534,
     "states_count": 55
   },
@@ -203,17 +203,17 @@
     "states_count": 55
   },
   "2025": {
-    "creation": "20260323",
-    "fetched_at": "2026-04-28T04:04:40.334037Z",
-    "filename": "StormEvents_details-ftp_v1.0_d2025_c20260323.csv.gz",
-    "row_total": 69831,
+    "creation": "20260526",
+    "fetched_at": "2026-06-01T11:25:08.776540Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2025_c20260526.csv.gz",
+    "row_total": 69950,
     "states_count": 55
   },
   "2026": {
-    "creation": "20260421",
-    "fetched_at": "2026-04-28T04:04:41.441498Z",
-    "filename": "StormEvents_details-ftp_v1.0_d2026_c20260421.csv.gz",
-    "row_total": 6635,
+    "creation": "20260519",
+    "fetched_at": "2026-06-01T11:25:09.738856Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2026_c20260519.csv.gz",
+    "row_total": 10488,
     "states_count": 52
   }
 }
