@@ -203,17 +203,17 @@
     "states_count": 55
   },
   "2025": {
-    "creation": "20260728",
-    "fetched_at": "2026-08-01T08:13:15.786269Z",
-    "filename": "StormEvents_details-ftp_v1.0_d2025_c20260728.csv.gz",
+    "creation": "20260819",
+    "fetched_at": "2026-09-01T10:59:39.905739Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2025_c20260819.csv.gz",
     "row_total": 69950,
     "states_count": 55
   },
   "2026": {
-    "creation": "20260728",
-    "fetched_at": "2026-08-01T08:13:19.683262Z",
-    "filename": "StormEvents_details-ftp_v1.0_d2026_c20260728.csv.gz",
-    "row_total": 22641,
+    "creation": "20260819",
+    "fetched_at": "2026-09-01T10:59:41.329068Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2026_c20260819.csv.gz",
+    "row_total": 27956,
     "states_count": 54
   }
 }
