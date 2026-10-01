@@ -210,10 +210,10 @@
     "states_count": 55
   },
   "2026": {
-    "creation": "20260819",
-    "fetched_at": "2026-09-01T10:59:41.329068Z",
-    "filename": "StormEvents_details-ftp_v1.0_d2026_c20260819.csv.gz",
-    "row_total": 27956,
+    "creation": "20260918",
+    "fetched_at": "2026-10-01T12:18:49.392912Z",
+    "filename": "StormEvents_details-ftp_v1.0_d2026_c20260918.csv.gz",
+    "row_total": 37718,
     "states_count": 54
   }
 }
